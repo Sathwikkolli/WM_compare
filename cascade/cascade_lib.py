@@ -44,7 +44,11 @@ def _stub_module(name):
     class _Any:
         def __init__(self, *a, **k): pass
         def __call__(self, *a, **k): return a[0] if a else None
-    m.__getattr__ = lambda attr: _Any        # PEP 562 module-level __getattr__
+    def _getattr(attr):                       # PEP 562 module-level __getattr__
+        if attr.startswith('__') and attr.endswith('__'):
+            raise AttributeError(attr)        # don't fake dunders (__file__, __path__...)
+        return _Any
+    m.__getattr__ = _getattr
     sys.modules[name] = m
     return m
 
@@ -85,7 +89,7 @@ def _patch_librosa_pad_center():
     # rebind in any module that already imported the old positional name
     for mod in list(sys.modules.values()):
         f = getattr(mod, '__file__', None)
-        if f and f.endswith('frequency.py') and hasattr(mod, 'pad_center'):
+        if isinstance(f, str) and f.endswith('frequency.py') and hasattr(mod, 'pad_center'):
             mod.pad_center = _compat_pad_center
 
 # --------------------------------------------------------------------------- #
