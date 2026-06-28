@@ -48,6 +48,46 @@ def _stub_module(name):
     sys.modules[name] = m
     return m
 
+
+_ORIG_PAD_CENTER = None
+
+def _compat_pad_center(data, size=None, axis=-1, **kw):
+    """Accept the old positional `pad_center(window, n_fft)` call and forward to
+    the real (keyword-only) librosa implementation captured in _ORIG_PAD_CENTER."""
+    orig = _ORIG_PAD_CENTER
+    if orig is None:
+        import librosa.util as U; orig = U.pad_center
+    if size is None:
+        return orig(data, **kw)
+    try:
+        return orig(data, size=size, axis=axis, **kw)   # modern keyword-only API
+    except TypeError:
+        return orig(data, size, axis, **kw)             # very old positional API
+_compat_pad_center._cascade_shim = True
+
+def _patch_librosa_pad_center():
+    """Bridge Timbre's positional pad_center call against newer librosa.
+    Patches librosa.util globally AND (crucially) rebinds the name inside any
+    already-imported `frequency.py`, which did `from librosa.util import pad_center`
+    and therefore holds its own copy that a librosa-level patch can't reach."""
+    global _ORIG_PAD_CENTER
+    try:
+        import librosa.util as U
+    except Exception:
+        return
+    if _ORIG_PAD_CENTER is None and not getattr(U.pad_center, '_cascade_shim', False):
+        _ORIG_PAD_CENTER = U.pad_center
+    U.pad_center = _compat_pad_center
+    try:
+        import librosa; librosa.util.pad_center = _compat_pad_center
+    except Exception:
+        pass
+    # rebind in any module that already imported the old positional name
+    for mod in list(sys.modules.values()):
+        f = getattr(mod, '__file__', None)
+        if f and f.endswith('frequency.py') and hasattr(mod, 'pad_center'):
+            mod.pad_center = _compat_pad_center
+
 # --------------------------------------------------------------------------- #
 #  Paths / constants
 # --------------------------------------------------------------------------- #
@@ -187,10 +227,14 @@ class TimbreAdapter:
         import torch, yaml
         self._torch = torch
         _stub_module('audiomentations')          # not installed; only used at train time
+        _patch_librosa_pad_center()              # bridge old positional pad_center call
         with chdir(TIMBRE_REPO):
             sys.path.insert(0, TIMBRE_REPO)
             sys.path.insert(0, os.path.join(TIMBRE_REPO, 'distortions'))
             from model.conv2_mel_modules import Encoder, Decoder
+            _patch_librosa_pad_center()          # rebind pad_center inside frequency.py
+            from distortions import frequency as _freq   # ensure module is reachable
+            _freq.pad_center = _compat_pad_center
             pc = yaml.load(open('config/process.yaml'), Loader=yaml.FullLoader)
             mc = yaml.load(open('config/model.yaml'),   Loader=yaml.FullLoader)
             tc = yaml.load(open('config/train.yaml'),   Loader=yaml.FullLoader)
