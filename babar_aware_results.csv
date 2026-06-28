@@ -1,0 +1,15 @@
+test,confidence,bit_accuracy,pesq
+00_baseline,0.998,1.0,4.3
+mp3_64k,0.998,1.0,4.22
+mp3_128k,0.998,1.0,4.25
+mp3_320k,0.998,1.0,4.25
+format_chain,0.998,1.0,4.18
+edit_trim_head5s,0.994,1.0,
+edit_add_silence2s,0.998,1.0,
+edit_splice_cut5s,0.997,1.0,
+sig_eq,0.998,1.0,4.29
+sig_pitch_up,0.071,0.6,
+sig_normalize,0.892,1.0,3.36
+platform_opus64,0.998,1.0,4.29
+platform_aac96,0.998,1.0,4.23
+rerecord_sim,0.987,1.0,

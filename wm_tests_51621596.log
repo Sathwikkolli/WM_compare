@@ -1,0 +1,8 @@
+[2026-06-10T03:10:27.752] error: SPANK:gpu_cmode: CUDA_VISIBLE_DEVICES not set.
+[2026-06-10T03:10:27.752] error: spank: required plugin lua.so: task_init_privileged() failed with rc=-1
+[2026-06-10T03:10:27.752] error: spank_task_init_privileged failed
+[2026-06-10T03:10:27.752] fatal: _fork_all_tasks: _pre_task_child_privileged() failed: Unspecified error
+[2026-06-10T03:10:27.765] error: _exec_wait_signal_child: write(fd:19) to unblock task 0 failed
+[2026-06-10T03:10:27.766] error: SPANK:gpu_cmode: CUDA_VISIBLE_DEVICES not set.
+[2026-06-10T03:10:27.766] error: spank: required plugin lua.so: task_exit() failed with rc=-1
+[2026-06-10T03:10:27.766] error: Unable to spank task 0 at exit

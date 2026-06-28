@@ -1,0 +1,9 @@
+test,conf,bit_accuracy,pesq
+tempo_up_10,0.419,0.625,
+tempo_down_10,0.329,0.625,
+crop_10s,0.997,1.0,
+crop_5s,0.994,0.938,
+crop_3s,0.99,0.938,
+denoise_afftdn,0.299,0.562,3.93
+noise_10db,0.335,0.812,1.22
+noise_5db,0.256,0.688,1.12

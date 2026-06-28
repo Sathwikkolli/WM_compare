@@ -1,0 +1,132 @@
+import os, subprocess, csv
+import numpy as np
+from concurrent.futures import ProcessPoolExecutor
+MODEL=os.environ.get('MODEL','audioseal')
+BASE=os.path.expanduser('~/wm_compare'); AUDIO=os.path.join(BASE,'audio'); WORK=os.path.join(BASE,'bench_'+MODEL); os.makedirs(WORK,exist_ok=True)
+SR=22050 if MODEL=='timbre' else 16000
+CLEAN=os.path.join(AUDIO,'client_original_16k.wav')
+TIMBRE_REPO=os.path.join(BASE,'TimbreWatermarking','watermarking_model')
+if MODEL=='audioseal':
+    WM=os.path.join(AUDIO,'native_wm_full.wav'); EMBEDDED='0110111111100100'
+elif MODEL=='aware':
+    WM=os.path.join(AUDIO,'aware_wm.wav'); EMBEDDED=open(os.path.join(AUDIO,'aware_bits.txt')).read().strip()
+else:
+    WM=os.path.join(BASE,'timbre_io','out','wmed-0','wavs','client.wav')
+    CLEAN=os.path.join(BASE,'timbre_io','in','client.wav')
+    EMBEDDED=''.join(map(str, eval(open(os.path.join(TIMBRE_REPO,'results','wmpool.txt')).read().strip().splitlines()[0])))
+NB=len(EMBEDDED); _det=None
+def _init():
+    global _det
+    import torch; torch.set_num_threads(1)
+    if MODEL=='audioseal':
+        from audioseal import AudioSeal; _det=AudioSeal.load_detector('audioseal_detector_16bits'); _det.eval()
+    elif MODEL=='aware':
+        from aware.utils.models import load; _,_det=load(name='AWARE')
+    else:
+        import sys, yaml
+        os.chdir(TIMBRE_REPO)
+        sys.path.insert(0,TIMBRE_REPO); sys.path.insert(0,os.path.join(TIMBRE_REPO,'distortions'))
+        from model.conv2_mel_modules import Decoder
+        pc=yaml.load(open('config/process.yaml'),Loader=yaml.FullLoader)
+        mc=yaml.load(open('config/model.yaml'),Loader=yaml.FullLoader)
+        tc=yaml.load(open('config/train.yaml'),Loader=yaml.FullLoader)
+        dec=Decoder(pc,mc,tc["watermark"]["length"],pc["audio"]["win_len"],mc["dim"]["embedding"],nlayers_decoder=mc["layer"]["nlayers_decoder"],attention_heads=mc["layer"]["attention_heads_decoder"])
+        dev='cuda' if torch.cuda.is_available() else 'cpu'; dec=dec.to(dev)
+        ckd='results/ckpt/pth'; ck=sorted(os.listdir(ckd),key=lambda x:os.path.getmtime(os.path.join(ckd,x)))[-1]
+        m=torch.load(os.path.join(ckd,ck),map_location=dev); dec.load_state_dict(m["decoder"],strict=False)
+        dec.eval(); dec.robust=False; _det=(dec,dev)
+def _load(path):
+    import soundfile as sf
+    s,_=sf.read(path)
+    if getattr(s,'ndim',1)>1: s=s.mean(axis=1)
+    return s.astype('float32')
+def _detect(path):
+    import numpy as np, torch
+    if MODEL=='timbre':
+        import librosa
+        dec,dev=_det; y,_=librosa.load(path,sr=SR)
+        x=torch.from_numpy(y).float().unsqueeze(0).unsqueeze(0).to(dev)
+        with torch.no_grad(): d=dec.test_forward(x)
+        pred=(d.squeeze().detach().cpu().numpy().ravel()[:NB]>=0).astype(int)
+        bits=''.join(map(str,pred.tolist())); acc=sum(a==b for a,b in zip(bits,EMBEDDED))/NB
+        return acc, acc
+    s=_load(path)
+    if MODEL=='audioseal':
+        x=torch.from_numpy(s).unsqueeze(0).unsqueeze(0)
+        with torch.no_grad(): prob,msg=_det.detect_watermark(x,sample_rate=SR)
+        bits=''.join(map(str,(msg.squeeze()>0.5).int().tolist())); conf=float(prob)
+    else:
+        from aware.service import detect_watermark
+        b,c=detect_watermark(s,SR,_det); bits=''.join(map(str,np.array(b).astype(int).ravel()[:NB].tolist())); conf=float(c)
+    return conf, sum(a==b for a,b in zip(bits,EMBEDDED))/NB
+def _pesq(path):
+    try:
+        from pesq import pesq
+        if MODEL=='timbre':
+            import librosa; ref=librosa.load(CLEAN,sr=16000)[0]; deg=librosa.load(path,sr=16000)[0]
+        else:
+            ref=_load(CLEAN); deg=_load(path)
+        n=min(len(ref),len(deg)); return float(pesq(16000,ref[:n],deg[:n],'wb'))
+    except Exception: return None
+def _ff(out,af=None):
+    cmd=['ffmpeg','-y','-loglevel','error','-i',WM]
+    if af: cmd+=['-af',af]
+    cmd+=['-ar',str(SR),'-ac','1',out]; subprocess.run(cmd,check=True); return out
+def _codec(tag,args):
+    enc=os.path.join(WORK,tag); subprocess.run(['ffmpeg','-y','-loglevel','error','-i',WM]+args+[enc],check=True)
+    out=enc+'.wav'; subprocess.run(['ffmpeg','-y','-loglevel','error','-i',enc,'-ar',str(SR),'-ac','1',out],check=True); return out
+def _resample8k():
+    a=os.path.join(WORK,'r8.wav'); subprocess.run(['ffmpeg','-y','-loglevel','error','-i',WM,'-ar','8000','-ac','1',a],check=True)
+    out=os.path.join(WORK,'r816.wav'); subprocess.run(['ffmpeg','-y','-loglevel','error','-i',a,'-ar',str(SR),'-ac','1',out],check=True); return out
+def _seg(name,fn):
+    import soundfile as sf; w=_load(WM); out=os.path.join(WORK,name); sf.write(out, fn(w).astype('float32'), SR, subtype='PCM_16'); return out
+def _noise(name, snr):
+    import soundfile as sf; w=_load(WM); rms=float(np.sqrt((w**2).mean())); p=rms/(10**(snr/20.0))
+    n=np.random.RandomState(0).randn(len(w)).astype('float32')*p
+    out=os.path.join(WORK,name); sf.write(out,(w+n).astype('float32'),SR,subtype='PCM_16'); return out
+def _quant(name,bits=8):
+    import soundfile as sf; w=_load(WM); L=2**(bits-1); q=np.round(w*L)/L
+    out=os.path.join(WORK,name); sf.write(out,q.astype('float32'),SR,subtype='PCM_16'); return out
+def _suppress(name):
+    import soundfile as sf; w=_load(WM).copy(); rs=np.random.RandomState(0); win=int(0.01*SR)
+    for _ in range(50):
+        i=rs.randint(0,len(w)-win); w[i:i+win]=0.0
+    out=os.path.join(WORK,name); sf.write(out,w.astype('float32'),SR,subtype='PCM_16'); return out
+ATTACKS={
+ 'baseline':(lambda: WM, True),
+ 'noise_20db':(lambda:_noise('n20.wav',20), True),
+ 'noise_10db':(lambda:_noise('n10.wav',10), True),
+ 'mp3_128':(lambda:_codec('m128.mp3',['-codec:a','libmp3lame','-b:a','128k']), True),
+ 'mp3_64':(lambda:_codec('m64.mp3',['-codec:a','libmp3lame','-b:a','64k']), True),
+ 'aac_128':(lambda:_codec('a128.m4a',['-c:a','aac','-b:a','128k']), True),
+ 'opus_64':(lambda:_codec('o64.opus',['-c:a','libopus','-b:a','64k']), True),
+ 'resample_8k':(_resample8k, True),
+ 'lowpass_4k':(lambda:_ff(os.path.join(WORK,'lp.wav'),'lowpass=f=4000'), True),
+ 'highpass_500':(lambda:_ff(os.path.join(WORK,'hp.wav'),'highpass=f=500'), True),
+ 'volume_0.5':(lambda:_ff(os.path.join(WORK,'vol.wav'),'volume=0.5'), True),
+ 'quantize_8bit':(lambda:_quant('q8.wav',8), True),
+ 'echo':(lambda:_ff(os.path.join(WORK,'ec.wav'),'aecho=0.8:0.88:60:0.4'), True),
+ 'speed_110':(lambda:_ff(os.path.join(WORK,'sp.wav'),'atempo=1.1'), False),
+ 'pitch_up':(lambda:_ff(os.path.join(WORK,'pi.wav'),'asetrate=%d,aresample=%d,atempo=0.9443'%(int(round(SR*1.059)),SR)), False),
+ 'crop_30s':(lambda:_seg('cr.wav', lambda w: w[40*SR:70*SR]), False),
+ 'sample_suppress':(lambda:_suppress('ss.wav'), True),
+}
+ORDER=['baseline','noise_20db','noise_10db','mp3_128','mp3_64','aac_128','opus_64','resample_8k','lowpass_4k','highpass_500','volume_0.5','quantize_8bit','echo','speed_110','pitch_up','crop_30s','sample_suppress']
+def work(name):
+    try:
+        fn,pesq=ATTACKS[name]; path=fn(); conf,acc=_detect(path)
+        pe=_pesq(path) if pesq else None; pe=round(pe,2) if (pe is not None and pe==pe) else None
+        return (name,round(conf,3),round(acc,3),pe)
+    except Exception as e:
+        return (name,'ERR','ERR',str(e)[:60])
+if __name__=='__main__':
+    nw=1 if MODEL=='timbre' else min(len(ORDER), int(os.environ.get('SLURM_CPUS_PER_TASK', os.cpu_count() or 4)))
+    print('MODEL=%s | embedded=%s | workers=%d'%(MODEL,EMBEDDED,nw), flush=True)
+    with ProcessPoolExecutor(max_workers=nw, initializer=_init) as ex:
+        results=list(ex.map(work, ORDER))
+    print('\n==== BENCHMARK (%s) ===='%MODEL)
+    print(f'{"test":16s} {"conf":>8s} {"bit_acc":>8s} {"pesq":>6s}')
+    for r in results: print(f'{r[0]:16s} {str(r[1]):>8s} {str(r[2]):>8s} {str(r[3]):>6s}')
+    with open(os.path.join(BASE,'bench_%s.csv'%MODEL),'w',newline='') as f:
+        csv.writer(f).writerows([['test','conf','bit_accuracy','pesq']]+results)
+    print('saved bench_%s.csv'%MODEL)

@@ -1,0 +1,49 @@
+start Wed Jun 10 03:18:17 EDT 2026
+parallel workers: 14
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+
+==== SUMMARY (AudioSeal / native_wm_full) ====
+test                     det_prob  bit_acc   pesq
+00_baseline                   1.0      1.0   4.19
+mp3_64k                       1.0      1.0   4.14
+mp3_128k                      1.0      1.0   4.15
+mp3_320k                      1.0      1.0   4.15
+format_chain                  1.0      1.0   4.09
+edit_trim_head5s            0.999      1.0   None
+edit_add_silence2s          0.983      1.0   None
+edit_splice_cut5s             1.0      1.0   None
+sig_eq                        1.0      1.0    4.2
+sig_pitch_up                0.001    0.812   None
+sig_normalize                 1.0      1.0   3.85
+platform_opus64               1.0      1.0   4.18
+platform_aac96                1.0      1.0   4.13
+rerecord_sim                0.995      1.0   None
+saved: /home/ksathwik/wm_compare/babar_audioseal_results.csv
+done Wed Jun 10 03:18:44 EDT 2026

@@ -1,0 +1,10 @@
+which: no nvidia-smi in (/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin)
+[2026-06-10T03:05:26.657] error: SPANK:gpu_cmode: can't find nvidia-smi in PATH.
+[2026-06-10T03:05:26.657] error: spank: required plugin lua.so: task_init_privileged() failed with rc=-1
+[2026-06-10T03:05:26.657] error: spank_task_init_privileged failed
+[2026-06-10T03:05:26.657] fatal: _fork_all_tasks: _pre_task_child_privileged() failed: Unspecified error
+[2026-06-10T03:05:26.665] error: _exec_wait_signal_child: write(fd:19) to unblock task 0 failed
+which: no nvidia-smi in (/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin)
+[2026-06-10T03:05:26.672] error: SPANK:gpu_cmode: can't find nvidia-smi in PATH.
+[2026-06-10T03:05:26.673] error: spank: required plugin lua.so: task_exit() failed with rc=-1
+[2026-06-10T03:05:26.673] error: Unable to spank task 0 at exit
