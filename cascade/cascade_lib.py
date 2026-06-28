@@ -262,17 +262,30 @@ class TimbreAdapter:
             win  = pc['audio']['win_len']; emb = mc['dim']['embedding']
             mlen = tc['watermark']['length']
             dev  = 'cuda' if torch.cuda.is_available() else 'cpu'
-            enc = Encoder(pc, mc, mlen, win, emb,
-                          nlayers_encoder=mc['layer']['nlayers_encoder'],
-                          attention_heads=mc['layer']['attention_heads_encoder']).to(dev)
-            dec = Decoder(pc, mc, mlen, win, emb,
-                          nlayers_decoder=mc['layer']['nlayers_decoder'],
-                          attention_heads=mc['layer']['attention_heads_decoder']).to(dev)
-            ckd = 'results/ckpt/pth'
-            ck  = sorted(os.listdir(ckd), key=lambda x: os.path.getmtime(os.path.join(ckd, x)))[-1]
-            m = torch.load(os.path.join(ckd, ck), map_location=dev)
-            enc.load_state_dict(m['encoder'])                 # VERIFY key
-            dec.load_state_dict(m['decoder'], strict=False)
+            # Timbre's get_vocoder() does torch.load() with NO map_location, so on a
+            # CPU node it tries to restore CUDA tensors and crashes. Wrap torch.load
+            # to default map_location to `dev` (and weights_only=False, since newer
+            # torch flipped that default and these checkpoints pickle full objects).
+            _orig_load = torch.load
+            def _load_compat(*a, **k):
+                k.setdefault('map_location', dev)
+                k.setdefault('weights_only', False)
+                return _orig_load(*a, **k)
+            torch.load = _load_compat
+            try:
+                enc = Encoder(pc, mc, mlen, win, emb,
+                              nlayers_encoder=mc['layer']['nlayers_encoder'],
+                              attention_heads=mc['layer']['attention_heads_encoder']).to(dev)
+                dec = Decoder(pc, mc, mlen, win, emb,
+                              nlayers_decoder=mc['layer']['nlayers_decoder'],
+                              attention_heads=mc['layer']['attention_heads_decoder']).to(dev)
+                ckd = 'results/ckpt/pth'
+                ck  = sorted(os.listdir(ckd), key=lambda x: os.path.getmtime(os.path.join(ckd, x)))[-1]
+                m = _load_compat(os.path.join(ckd, ck), map_location=dev)
+                enc.load_state_dict(m['encoder'])                 # VERIFY key
+                dec.load_state_dict(m['decoder'], strict=False)
+            finally:
+                torch.load = _orig_load                           # always restore
             enc.eval(); dec.eval(); dec.robust = False
             self._enc, self._dec, self._dev = enc, dec, dev
     def embed(self, y22):
