@@ -69,28 +69,43 @@ def _compat_pad_center(data, size=None, axis=-1, **kw):
         return orig(data, size, axis, **kw)             # very old positional API
 _compat_pad_center._cascade_shim = True
 
+_ORIG_MEL = None
+def _compat_mel(*args, **kw):
+    """Accept Timbre's positional `mel(sr, n_fft, n_mels, fmin, fmax)` and forward
+    to newer librosa.filters.mel, which made every argument keyword-only."""
+    orig = _ORIG_MEL
+    if orig is None:
+        import librosa; orig = librosa.filters.mel
+    names = ['sr', 'n_fft', 'n_mels', 'fmin', 'fmax', 'htk', 'norm', 'dtype']
+    for i, a in enumerate(args):
+        kw.setdefault(names[i], a)
+    return orig(**kw)
+_compat_mel._cascade_shim = True
+
 def _patch_librosa_pad_center():
     """Bridge Timbre's positional pad_center call against newer librosa.
     Patches librosa.util globally AND (crucially) rebinds the name inside any
     already-imported `frequency.py`, which did `from librosa.util import pad_center`
     and therefore holds its own copy that a librosa-level patch can't reach."""
-    global _ORIG_PAD_CENTER
+    global _ORIG_PAD_CENTER, _ORIG_MEL
     try:
-        import librosa.util as U
+        import librosa, librosa.util as U
     except Exception:
         return
     if _ORIG_PAD_CENTER is None and not getattr(U.pad_center, '_cascade_shim', False):
         _ORIG_PAD_CENTER = U.pad_center
+    if _ORIG_MEL is None and not getattr(librosa.filters.mel, '_cascade_shim', False):
+        _ORIG_MEL = librosa.filters.mel
     U.pad_center = _compat_pad_center
-    try:
-        import librosa; librosa.util.pad_center = _compat_pad_center
-    except Exception:
-        pass
-    # rebind in any module that already imported the old positional name
+    librosa.util.pad_center = _compat_pad_center
+    librosa.filters.mel = _compat_mel
+    # rebind in any module that already imported the old positional names
     for mod in list(sys.modules.values()):
         f = getattr(mod, '__file__', None)
-        if isinstance(f, str) and f.endswith('frequency.py') and hasattr(mod, 'pad_center'):
-            mod.pad_center = _compat_pad_center
+        if isinstance(f, str) and f.endswith('frequency.py'):
+            if hasattr(mod, 'pad_center'):     mod.pad_center = _compat_pad_center
+            if hasattr(mod, 'librosa_mel_fn'): mod.librosa_mel_fn = _compat_mel
+            if hasattr(mod, 'mel'):            mod.mel = _compat_mel
 
 # --------------------------------------------------------------------------- #
 #  Paths / constants
@@ -239,6 +254,8 @@ class TimbreAdapter:
             _patch_librosa_pad_center()          # rebind pad_center inside frequency.py
             from distortions import frequency as _freq   # ensure module is reachable
             _freq.pad_center = _compat_pad_center
+            if hasattr(_freq, 'librosa_mel_fn'): _freq.librosa_mel_fn = _compat_mel
+            if hasattr(_freq, 'mel'):            _freq.mel = _compat_mel
             pc = yaml.load(open('config/process.yaml'), Loader=yaml.FullLoader)
             mc = yaml.load(open('config/model.yaml'),   Loader=yaml.FullLoader)
             tc = yaml.load(open('config/train.yaml'),   Loader=yaml.FullLoader)
