@@ -205,29 +205,51 @@ def main():
     sizes = [int(x) for x in args.sizes.split(',')]
     cfgs  = configs_for(sizes)
     attacks = build_attacks(SR_MASTER)
-    print(f'{len(cfgs)} configs x {len(ATTACK_ORDER)} attacks', flush=True)
+
+    # ---- CSV files written INCREMENTALLY (one append per finished config) so a
+    #      timeout/crash never loses completed work, and a re-run RESUMES. ----
+    files = {
+        'inter':  (os.path.join(OUT, 'cascade_interference.csv'),
+                   ['config','stage','embedded','detected_wm','conf','bit_acc']),
+        'qual':   (os.path.join(OUT, 'cascade_quality.csv'),
+                   ['config','stage','embedded','depth','pesq','snr_db','si_snr_db','stoi']),
+        'robust': (os.path.join(OUT, 'cascade_robustness.csv'),
+                   ['config','attack','watermark','conf','bit_acc','bits','pesq']),
+    }
+    def appender(key):
+        path, header = files[key]
+        new = (not os.path.exists(path)) or os.path.getsize(path) == 0
+        f = open(path, 'a', newline=''); w = csv.writer(f)
+        if new: w.writerow(header); f.flush()
+        return f, w
+
+    # a config counts as DONE if its last attack (pitch_up) is already in robustness CSV
+    done = set()
+    rpath = files['robust'][0]
+    if os.path.exists(rpath):
+        with open(rpath) as f:
+            for r in csv.DictReader(f):
+                if r.get('attack') == ATTACK_ORDER[-1]:
+                    done.add(r['config'])
+    if done:
+        print(f'resuming -- already complete: {sorted(done)}', flush=True)
 
     run_controls(master22, master16)
 
-    inter_rows, qual_rows, robust_rows = [], [], []
-    for seq in cfgs:
-        try:
-            run_config(seq, master22, master16, attacks, inter_rows, qual_rows, robust_rows)
-        except Exception as e:
-            print(f'CONFIG {cfg_id(seq)} FATAL: {e}', flush=True); traceback.print_exc()
-
-    def dump(name, header, rows):
-        p = os.path.join(OUT, name)
-        with open(p, 'w', newline='') as f:
-            w = csv.writer(f); w.writerow(header); w.writerows(rows)
-        print('saved', p, flush=True)
-
-    dump('cascade_interference.csv',
-         ['config','stage','embedded','detected_wm','conf','bit_acc'], inter_rows)
-    dump('cascade_quality.csv',
-         ['config','stage','embedded','depth','pesq','snr_db','si_snr_db','stoi'], qual_rows)
-    dump('cascade_robustness.csv',
-         ['config','attack','watermark','conf','bit_acc','bits','pesq'], robust_rows)
+    fi, wi = appender('inter'); fq, wq = appender('qual'); fr, wr = appender('robust')
+    todo = [s for s in cfgs if cfg_id(s) not in done]
+    print(f'{len(cfgs)} configs x {len(ATTACK_ORDER)} attacks  ({len(todo)} to run)', flush=True)
+    try:
+        for seq in todo:
+            ir, qr, rr = [], [], []
+            try:
+                run_config(seq, master22, master16, attacks, ir, qr, rr)
+            except Exception as e:
+                print(f'CONFIG {cfg_id(seq)} FATAL: {e}', flush=True); traceback.print_exc()
+            wi.writerows(ir); wq.writerows(qr); wr.writerows(rr)   # persist after EACH config
+            fi.flush(); fq.flush(); fr.flush()
+    finally:
+        fi.close(); fq.close(); fr.close()
     print('\nALL DONE. Now run:  python make_report.py', flush=True)
 
 
