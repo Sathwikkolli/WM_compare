@@ -23,8 +23,30 @@ Run `python run_cascade.py --selftest` first -- it solo embeds+detects each tool
 on the master clip and fails fast (seconds) if any adapter is wrong.
 """
 
-import os, sys, math, contextlib, subprocess
+import os, sys, math, contextlib, subprocess, types
+# --- Disable torch.compile / TorchInductor BEFORE torch is ever imported. ---
+# The cluster's system g++ rejects PyTorch's `-std=c++20`, so any JIT C++ kernel
+# build crashes (this is why the existing sbatch sets TORCHDYNAMO_DISABLE=1).
+# Setting it here makes the harness robust no matter how it's launched.
+os.environ.setdefault('TORCHDYNAMO_DISABLE', '1')
+os.environ.setdefault('TORCH_COMPILE_DISABLE', '1')
+os.environ.setdefault('NO_TORCH_COMPILE', '1')
 import numpy as np
+
+
+def _stub_module(name):
+    """Register a fake module whose every attribute is a no-op passthrough class.
+    Used for `audiomentations`, which Timbre imports for *training-time* audio
+    augmentations we never invoke at inference (decoder.robust=False)."""
+    if name in sys.modules:
+        return sys.modules[name]
+    m = types.ModuleType(name)
+    class _Any:
+        def __init__(self, *a, **k): pass
+        def __call__(self, *a, **k): return a[0] if a else None
+    m.__getattr__ = lambda attr: _Any        # PEP 562 module-level __getattr__
+    sys.modules[name] = m
+    return m
 
 # --------------------------------------------------------------------------- #
 #  Paths / constants
@@ -101,6 +123,12 @@ class AudioSealAdapter:
         self._gen = None; self._det = None
     def load(self):
         import torch
+        try:                                    # belt-and-suspenders vs torch.compile
+            import torch._dynamo as _dyn
+            _dyn.config.suppress_errors = True
+            _dyn.disable()
+        except Exception:
+            pass
         from audioseal import AudioSeal
         self._gen = AudioSeal.load_generator('audioseal_wm_16bits')
         self._det = AudioSeal.load_detector('audioseal_detector_16bits'); self._det.eval()
@@ -129,6 +157,9 @@ class AwareAdapter:
     def __init__(self):
         self._emb = None; self._det = None
     def load(self):
+        src = os.path.join(BASE, 'aware', 'src')   # src-layout package, not pip-installed
+        if os.path.isdir(src) and src not in sys.path:
+            sys.path.insert(0, src)
         from aware.utils.models import load
         self._emb, self._det = load(name='AWARE')
     def embed(self, y22):
@@ -155,6 +186,7 @@ class TimbreAdapter:
     def load(self):
         import torch, yaml
         self._torch = torch
+        _stub_module('audiomentations')          # not installed; only used at train time
         with chdir(TIMBRE_REPO):
             sys.path.insert(0, TIMBRE_REPO)
             sys.path.insert(0, os.path.join(TIMBRE_REPO, 'distortions'))
