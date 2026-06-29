@@ -1,0 +1,8 @@
+control,watermark,conf,bit_acc,bits
+clean_negative,AudioSeal,0.17531026899814606,0.75,0111111111000111
+clean_negative,AWARE,0.0489006256080725,0.6,00111110011100110001
+clean_negative,Timbre,0.4,0.4,0001110110
+resample_only,AudioSeal,0.14530417323112488,0.75,0111111111000111
+resample_only,AWARE,0.04890092064598476,0.6,00111110011100110001
+resample_only,Timbre,0.5,0.5,0001010110
+resample_only_quality,-,4.612,,snr=52.56 sisnr=52.74
