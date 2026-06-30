@@ -87,13 +87,13 @@ def a_gaussian(y, sr, snr_db):
     return (y + n).astype('float32')
 
 def a_background(y, sr, snr_db):
-    import soundfile as sf
+    import soundfile as sf, glob
     if not os.path.isdir(NOISE_DIR):
         return None
-    wavs = [f for f in os.listdir(NOISE_DIR) if f.lower().endswith('.wav')]
+    wavs = sorted(glob.glob(os.path.join(NOISE_DIR, '**', '*.wav'), recursive=True))  # any depth
     if not wavs:
         return None
-    noise, nsr = sf.read(os.path.join(NOISE_DIR, sorted(wavs)[0]))
+    noise, nsr = sf.read(wavs[0])
     if getattr(noise, 'ndim', 1) > 1: noise = noise.mean(1)
     if nsr != sr:
         import librosa; noise = librosa.resample(noise.astype('float32'), orig_sr=nsr, target_sr=sr)
