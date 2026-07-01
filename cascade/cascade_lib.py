@@ -110,7 +110,9 @@ def _patch_librosa_pad_center():
 # --------------------------------------------------------------------------- #
 #  Paths / constants
 # --------------------------------------------------------------------------- #
-BASE        = os.path.expanduser('~/wm_compare')
+# Root of the checkout. Override with WM_COMPARE_BASE on machines that don't use
+# the ~/wm_compare cluster layout (e.g. the deployment server).
+BASE        = os.environ.get('WM_COMPARE_BASE', os.path.expanduser('~/wm_compare'))
 AUDIO       = os.path.join(BASE, 'audio')
 TIMBRE_REPO = os.path.join(BASE, 'TimbreWatermarking', 'watermarking_model')
 
@@ -119,7 +121,17 @@ SR_16K    = 16000      # AudioSeal / AWARE native rate
 
 # Fixed ground-truth messages (must match what each tool actually embeds)
 AUDIOSEAL_BITS = '0110111111100100'                                   # 16 bits
-AWARE_BITS     = open(os.path.join(AUDIO, 'aware_bits.txt')).read().strip()  # 20 bits
+def _aware_bits():
+    """AWARE ground-truth message. Read from audio/aware_bits.txt if present;
+    otherwise fall back to a fixed 20-bit default so the module still imports on
+    a deployment box that doesn't ship the benchmark's audio/ dir. (Per-user
+    embedding overrides this at runtime, so the exact default is not important.)"""
+    p = os.path.join(AUDIO, 'aware_bits.txt')
+    try:
+        return open(p).read().strip()
+    except OSError:
+        return '01101111111001000001'
+AWARE_BITS     = _aware_bits()                                        # 20 bits
 
 def _timbre_bits():
     """Ground-truth Timbre message = first line of wmpool.txt (a python list)."""
