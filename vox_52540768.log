@@ -1,0 +1,350 @@
+start Mon Jun 29 15:52:13 EDT 2026
+master: /home/ksathwik/wm_compare/audio/client_original_16k.wav  (2567068 samp @ 22050)
+=== VOX SELFTEST (apply each attack once to the combined file) ===
+Removing weight norm...
+  time_stretch         OK   (0.7) len=2566973
+  gaussian_noise       OK   (40dB) len=2566973
+  background_noise     OK   (40dB) len=2566973
+  opus                 OK   (16k) len=2566974
+Loading weights:   0%|          | 0/252 [00:00<?, ?it/s]Loading weights:  91%|█████████ | 229/252 [00:00<00:00, 2246.99it/s]Loading weights: 100%|██████████| 252/252 [00:00<00:00, 2292.97it/s]
+  encodec              OK   (1.5kbps) len=2566973
+  quantization         OK   (4lvl) len=2566973
+  highpass             OK   (0.1) len=2566973
+  lowpass              OK   (0.1) len=2566973
+  smooth               OK   (w6) len=2566973
+  echo                 OK   (d0.1) len=2566973
+  mp3                  OK   (8k) len=2566973
+  aac                  OK   (8k) len=2567168
+  dynamic_compression  OK   (t-10_r2) len=2566973
+  dynamic_expansion    OK   (t-10_r2) len=2566973
+  inverse_polarity     OK   (neg) len=2566973
+  time_jitter          OK   (s0.01) len=2566973
+  phase_shift          OK   (1) len=2566973
+=== SELFTEST PASSED ===
+master: /home/ksathwik/wm_compare/audio/client_original_16k.wav  (2567068 samp @ 22050)
+
+#### TARGET audioseal  (watermarks: AudioSeal)
+   clean  AudioSeal  bit_acc=1.0
+   time_stretch       0.7      | Au=0.75
+   time_stretch       0.9      | Au=0.62
+   time_stretch       1.1      | Au=0.81
+   time_stretch       1.3      | Au=0.69
+   time_stretch       1.5      | Au=0.75
+   gaussian_noise     40dB     | Au=1.0
+   gaussian_noise     30dB     | Au=1.0
+   gaussian_noise     20dB     | Au=1.0
+   gaussian_noise     10dB     | Au=0.88
+   gaussian_noise     5dB      | Au=0.75
+   background_noise   40dB     | Au=1.0
+   background_noise   30dB     | Au=1.0
+   background_noise   20dB     | Au=1.0
+   background_noise   10dB     | Au=0.88
+   background_noise   5dB      | Au=0.81
+   opus               16k      | Au=1.0
+   opus               32k      | Au=1.0
+   opus               64k      | Au=1.0
+   opus               128k     | Au=1.0
+   opus               256k     | Au=1.0
+[libopus @ 0x556aecb31b40] The bit rate 496000 bps is unsupported. Please choose a value between 500 and 256000.
+[aost#0:0/libopus @ 0x556aecb31780] [enc:libopus @ 0x556aecb31a40] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.
+[af#0:0 @ 0x556aecb32d80] Error sending frames to consumers: Invalid argument
+[af#0:0 @ 0x556aecb32d80] Task finished with error code: -22 (Invalid argument)
+[af#0:0 @ 0x556aecb32d80] Terminating thread with return code -22 (Invalid argument)
+[aost#0:0/libopus @ 0x556aecb31780] [enc:libopus @ 0x556aecb31a40] Could not open encoder before EOF
+[aost#0:0/libopus @ 0x556aecb31780] Task finished with error code: -22 (Invalid argument)
+[aost#0:0/libopus @ 0x556aecb31780] Terminating thread with return code -22 (Invalid argument)
+[out#0/opus @ 0x556aecb1cac0] Nothing was written into output file, because at least one of its streams received no packets.
+   opus               496k     ERROR Command '['ffmpeg', '-y', '-loglevel', 'error', '-
+Loading weights:   0%|          | 0/252 [00:00<?, ?it/s]Loading weights: 100%|██████████| 252/252 [00:00<00:00, 7596.47it/s]
+   encodec            1.5kbps  | Au=0.62
+   encodec            3.0kbps  | Au=0.69
+   encodec            6.0kbps  | Au=0.69
+   encodec            12.0kbps | Au=0.94
+   encodec            24.0kbps | Au=1.0
+   quantization       4lvl     | Au=0.62
+   quantization       8lvl     | Au=0.5
+   quantization       16lvl    | Au=0.81
+   quantization       32lvl    | Au=0.88
+   quantization       64lvl    | Au=1.0
+   highpass           0.1      | Au=0.56
+   highpass           0.2      | Au=0.62
+   highpass           0.3      | Au=0.44
+   highpass           0.4      | Au=0.5
+   highpass           0.5      | Au=0.5
+   lowpass            0.1      | Au=1.0
+   lowpass            0.2      | Au=1.0
+   lowpass            0.3      | Au=1.0
+   lowpass            0.4      | Au=1.0
+   lowpass            0.5      | Au=1.0
+   smooth             w6       | Au=1.0
+   smooth             w10      | Au=1.0
+   smooth             w14      | Au=1.0
+   smooth             w18      | Au=1.0
+   smooth             w22      | Au=0.56
+   echo               d0.1     | Au=1.0
+   echo               d0.3     | Au=1.0
+   echo               d0.5     | Au=1.0
+   echo               d0.7     | Au=1.0
+   echo               d0.9     | Au=1.0
+   mp3                8k       | Au=1.0
+   mp3                16k      | Au=1.0
+   mp3                24k      | Au=1.0
+   mp3                32k      | Au=1.0
+   mp3                40k      | Au=1.0
+   aac                8k       | Au=1.0
+   aac                40k      | Au=1.0
+   dynamic_compression t-10_r2  | Au=1.0
+   dynamic_compression t-30_r8  | Au=1.0
+   dynamic_expansion  t-10_r2  | Au=0.94
+   dynamic_expansion  t-30_r8  | Au=1.0
+   inverse_polarity   neg      | Au=0.12
+   time_jitter        s0.01    | Au=1.0
+   time_jitter        s0.5     | Au=1.0
+   phase_shift        1        | Au=1.0
+   phase_shift        -1000    | Au=1.0
+
+#### TARGET aware  (watermarks: AWARE)
+   clean  AWARE      bit_acc=1.0
+   time_stretch       0.7      | AW=1.0
+   time_stretch       0.9      | AW=1.0
+   time_stretch       1.1      | AW=0.95
+   time_stretch       1.3      | AW=0.95
+   time_stretch       1.5      | AW=0.95
+   gaussian_noise     40dB     | AW=1.0
+   gaussian_noise     30dB     | AW=1.0
+   gaussian_noise     20dB     | AW=1.0
+   gaussian_noise     10dB     | AW=1.0
+   gaussian_noise     5dB      | AW=0.95
+   background_noise   40dB     | AW=1.0
+   background_noise   30dB     | AW=1.0
+   background_noise   20dB     | AW=1.0
+   background_noise   10dB     | AW=1.0
+   background_noise   5dB      | AW=1.0
+   opus               16k      | AW=1.0
+   opus               32k      | AW=1.0
+   opus               64k      | AW=1.0
+   opus               128k     | AW=1.0
+   opus               256k     | AW=1.0
+[libopus @ 0x563786417b40] The bit rate 496000 bps is unsupported. Please choose a value between 500 and 256000.
+[aost#0:0/libopus @ 0x563786417780] [enc:libopus @ 0x563786417a40] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.
+[af#0:0 @ 0x563786418d80] Error sending frames to consumers: Invalid argument
+[af#0:0 @ 0x563786418d80] Task finished with error code: -22 (Invalid argument)
+[af#0:0 @ 0x563786418d80] Terminating thread with return code -22 (Invalid argument)
+[aost#0:0/libopus @ 0x563786417780] [enc:libopus @ 0x563786417a40] Could not open encoder before EOF
+[aost#0:0/libopus @ 0x563786417780] Task finished with error code: -22 (Invalid argument)
+[aost#0:0/libopus @ 0x563786417780] Terminating thread with return code -22 (Invalid argument)
+[out#0/opus @ 0x563786402ac0] Nothing was written into output file, because at least one of its streams received no packets.
+   opus               496k     ERROR Command '['ffmpeg', '-y', '-loglevel', 'error', '-
+   encodec            1.5kbps  | AW=0.7
+   encodec            3.0kbps  | AW=0.7
+   encodec            6.0kbps  | AW=0.75
+   encodec            12.0kbps | AW=0.8
+   encodec            24.0kbps | AW=0.8
+   quantization       4lvl     | AW=0.7
+   quantization       8lvl     | AW=0.85
+   quantization       16lvl    | AW=0.9
+   quantization       32lvl    | AW=1.0
+   quantization       64lvl    | AW=1.0
+   highpass           0.1      | AW=0.9
+   highpass           0.2      | AW=0.65
+   highpass           0.3      | AW=0.95
+   highpass           0.4      | AW=1.0
+   highpass           0.5      | AW=0.65
+   lowpass            0.1      | AW=0.95
+   lowpass            0.2      | AW=1.0
+   lowpass            0.3      | AW=1.0
+   lowpass            0.4      | AW=1.0
+   lowpass            0.5      | AW=1.0
+   smooth             w6       | AW=1.0
+   smooth             w10      | AW=1.0
+   smooth             w14      | AW=1.0
+   smooth             w18      | AW=1.0
+   smooth             w22      | AW=1.0
+   echo               d0.1     | AW=1.0
+   echo               d0.3     | AW=1.0
+   echo               d0.5     | AW=1.0
+   echo               d0.7     | AW=1.0
+   echo               d0.9     | AW=1.0
+   mp3                8k       | AW=0.85
+   mp3                16k      | AW=1.0
+   mp3                24k      | AW=1.0
+   mp3                32k      | AW=1.0
+   mp3                40k      | AW=1.0
+   aac                8k       | AW=1.0
+   aac                40k      | AW=1.0
+   dynamic_compression t-10_r2  | AW=1.0
+   dynamic_compression t-30_r8  | AW=1.0
+   dynamic_expansion  t-10_r2  | AW=1.0
+   dynamic_expansion  t-30_r8  | AW=1.0
+   inverse_polarity   neg      | AW=1.0
+   time_jitter        s0.01    | AW=1.0
+   time_jitter        s0.5     | AW=1.0
+   phase_shift        1        | AW=1.0
+   phase_shift        -1000    | AW=1.0
+
+#### TARGET timbre  (watermarks: Timbre)
+Removing weight norm...
+   clean  Timbre     bit_acc=1.0
+   time_stretch       0.7      | Ti=1.0
+   time_stretch       0.9      | Ti=1.0
+   time_stretch       1.1      | Ti=1.0
+   time_stretch       1.3      | Ti=1.0
+   time_stretch       1.5      | Ti=1.0
+   gaussian_noise     40dB     | Ti=1.0
+   gaussian_noise     30dB     | Ti=1.0
+   gaussian_noise     20dB     | Ti=1.0
+   gaussian_noise     10dB     | Ti=1.0
+   gaussian_noise     5dB      | Ti=0.8
+   background_noise   40dB     | Ti=1.0
+   background_noise   30dB     | Ti=1.0
+   background_noise   20dB     | Ti=1.0
+   background_noise   10dB     | Ti=1.0
+   background_noise   5dB      | Ti=1.0
+   opus               16k      | Ti=1.0
+   opus               32k      | Ti=1.0
+   opus               64k      | Ti=1.0
+   opus               128k     | Ti=1.0
+   opus               256k     | Ti=1.0
+[libopus @ 0x55b51db0ab40] The bit rate 496000 bps is unsupported. Please choose a value between 500 and 256000.
+[aost#0:0/libopus @ 0x55b51db0a780] [enc:libopus @ 0x55b51db0aa40] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.
+[af#0:0 @ 0x55b51db0bd80] Error sending frames to consumers: Invalid argument
+[af#0:0 @ 0x55b51db0bd80] Task finished with error code: -22 (Invalid argument)
+[af#0:0 @ 0x55b51db0bd80] Terminating thread with return code -22 (Invalid argument)
+[aost#0:0/libopus @ 0x55b51db0a780] [enc:libopus @ 0x55b51db0aa40] Could not open encoder before EOF
+[aost#0:0/libopus @ 0x55b51db0a780] Task finished with error code: -22 (Invalid argument)
+[aost#0:0/libopus @ 0x55b51db0a780] Terminating thread with return code -22 (Invalid argument)
+[out#0/opus @ 0x55b51daf5ac0] Nothing was written into output file, because at least one of its streams received no packets.
+   opus               496k     ERROR Command '['ffmpeg', '-y', '-loglevel', 'error', '-
+   encodec            1.5kbps  | Ti=0.8
+   encodec            3.0kbps  | Ti=0.7
+   encodec            6.0kbps  | Ti=0.8
+   encodec            12.0kbps | Ti=0.9
+   encodec            24.0kbps | Ti=1.0
+   quantization       4lvl     | Ti=0.5
+   quantization       8lvl     | Ti=0.6
+   quantization       16lvl    | Ti=0.8
+   quantization       32lvl    | Ti=1.0
+   quantization       64lvl    | Ti=1.0
+   highpass           0.1      | Ti=1.0
+   highpass           0.2      | Ti=0.8
+   highpass           0.3      | Ti=0.7
+   highpass           0.4      | Ti=0.7
+   highpass           0.5      | Ti=0.4
+   lowpass            0.1      | Ti=0.9
+   lowpass            0.2      | Ti=1.0
+   lowpass            0.3      | Ti=1.0
+   lowpass            0.4      | Ti=1.0
+   lowpass            0.5      | Ti=1.0
+   smooth             w6       | Ti=1.0
+   smooth             w10      | Ti=1.0
+   smooth             w14      | Ti=1.0
+   smooth             w18      | Ti=0.9
+   smooth             w22      | Ti=0.9
+   echo               d0.1     | Ti=1.0
+   echo               d0.3     | Ti=1.0
+   echo               d0.5     | Ti=1.0
+   echo               d0.7     | Ti=1.0
+   echo               d0.9     | Ti=1.0
+   mp3                8k       | Ti=1.0
+   mp3                16k      | Ti=1.0
+   mp3                24k      | Ti=1.0
+   mp3                32k      | Ti=1.0
+   mp3                40k      | Ti=1.0
+   aac                8k       | Ti=1.0
+   aac                40k      | Ti=1.0
+   dynamic_compression t-10_r2  | Ti=1.0
+   dynamic_compression t-30_r8  | Ti=1.0
+   dynamic_expansion  t-10_r2  | Ti=1.0
+   dynamic_expansion  t-30_r8  | Ti=1.0
+   inverse_polarity   neg      | Ti=1.0
+   time_jitter        s0.01    | Ti=1.0
+   time_jitter        s0.5     | Ti=1.0
+   phase_shift        1        | Ti=1.0
+   phase_shift        -1000    | Ti=1.0
+
+#### TARGET combined  (watermarks: AudioSeal, AWARE, Timbre)
+   clean  AudioSeal  bit_acc=1.0
+   clean  AWARE      bit_acc=1.0
+   clean  Timbre     bit_acc=1.0
+   time_stretch       0.7      | Au=0.62 AW=1.0 Ti=1.0
+   time_stretch       0.9      | Au=0.62 AW=1.0 Ti=1.0
+   time_stretch       1.1      | Au=0.5 AW=1.0 Ti=1.0
+   time_stretch       1.3      | Au=0.81 AW=0.95 Ti=1.0
+   time_stretch       1.5      | Au=0.75 AW=0.95 Ti=1.0
+   gaussian_noise     40dB     | Au=1.0 AW=1.0 Ti=1.0
+   gaussian_noise     30dB     | Au=1.0 AW=1.0 Ti=1.0
+   gaussian_noise     20dB     | Au=1.0 AW=1.0 Ti=1.0
+   gaussian_noise     10dB     | Au=0.88 AW=1.0 Ti=1.0
+   gaussian_noise     5dB      | Au=0.88 AW=0.95 Ti=0.8
+   background_noise   40dB     | Au=1.0 AW=1.0 Ti=1.0
+   background_noise   30dB     | Au=1.0 AW=1.0 Ti=1.0
+   background_noise   20dB     | Au=1.0 AW=1.0 Ti=1.0
+   background_noise   10dB     | Au=0.88 AW=1.0 Ti=1.0
+   background_noise   5dB      | Au=0.88 AW=1.0 Ti=1.0
+   opus               16k      | Au=1.0 AW=1.0 Ti=1.0
+   opus               32k      | Au=1.0 AW=1.0 Ti=1.0
+   opus               64k      | Au=1.0 AW=1.0 Ti=1.0
+   opus               128k     | Au=1.0 AW=1.0 Ti=1.0
+   opus               256k     | Au=1.0 AW=1.0 Ti=1.0
+[libopus @ 0x5610dd6c9b40] The bit rate 496000 bps is unsupported. Please choose a value between 500 and 256000.
+[aost#0:0/libopus @ 0x5610dd6c9780] [enc:libopus @ 0x5610dd6c9a40] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.
+[af#0:0 @ 0x5610dd6cad80] Error sending frames to consumers: Invalid argument
+[af#0:0 @ 0x5610dd6cad80] Task finished with error code: -22 (Invalid argument)
+[af#0:0 @ 0x5610dd6cad80] Terminating thread with return code -22 (Invalid argument)
+[aost#0:0/libopus @ 0x5610dd6c9780] [enc:libopus @ 0x5610dd6c9a40] Could not open encoder before EOF
+[aost#0:0/libopus @ 0x5610dd6c9780] Task finished with error code: -22 (Invalid argument)
+[aost#0:0/libopus @ 0x5610dd6c9780] Terminating thread with return code -22 (Invalid argument)
+[out#0/opus @ 0x5610dd6b4ac0] Nothing was written into output file, because at least one of its streams received no packets.
+   opus               496k     ERROR Command '['ffmpeg', '-y', '-loglevel', 'error', '-
+   encodec            1.5kbps  | Au=0.62 AW=0.7 Ti=0.6
+   encodec            3.0kbps  | Au=0.62 AW=0.75 Ti=0.8
+   encodec            6.0kbps  | Au=0.81 AW=0.75 Ti=0.8
+   encodec            12.0kbps | Au=1.0 AW=0.8 Ti=0.9
+   encodec            24.0kbps | Au=1.0 AW=0.8 Ti=1.0
+   quantization       4lvl     | Au=0.62 AW=0.7 Ti=0.7
+   quantization       8lvl     | Au=0.44 AW=0.85 Ti=0.5
+   quantization       16lvl    | Au=0.94 AW=0.9 Ti=1.0
+   quantization       32lvl    | Au=0.94 AW=1.0 Ti=1.0
+   quantization       64lvl    | Au=0.88 AW=1.0 Ti=1.0
+   highpass           0.1      | Au=0.56 AW=0.85 Ti=1.0
+   highpass           0.2      | Au=0.5 AW=0.65 Ti=0.8
+   highpass           0.3      | Au=0.44 AW=0.85 Ti=0.6
+   highpass           0.4      | Au=0.44 AW=0.95 Ti=0.7
+   highpass           0.5      | Au=0.5 AW=0.65 Ti=0.4
+   lowpass            0.1      | Au=1.0 AW=0.95 Ti=0.9
+   lowpass            0.2      | Au=1.0 AW=1.0 Ti=1.0
+   lowpass            0.3      | Au=1.0 AW=1.0 Ti=1.0
+   lowpass            0.4      | Au=1.0 AW=1.0 Ti=1.0
+   lowpass            0.5      | Au=1.0 AW=1.0 Ti=1.0
+   smooth             w6       | Au=1.0 AW=1.0 Ti=1.0
+   smooth             w10      | Au=1.0 AW=1.0 Ti=1.0
+   smooth             w14      | Au=1.0 AW=1.0 Ti=1.0
+   smooth             w18      | Au=1.0 AW=1.0 Ti=0.9
+   smooth             w22      | Au=0.56 AW=1.0 Ti=0.9
+   echo               d0.1     | Au=1.0 AW=1.0 Ti=1.0
+   echo               d0.3     | Au=1.0 AW=1.0 Ti=1.0
+   echo               d0.5     | Au=1.0 AW=1.0 Ti=1.0
+   echo               d0.7     | Au=1.0 AW=1.0 Ti=1.0
+   echo               d0.9     | Au=1.0 AW=1.0 Ti=1.0
+   mp3                8k       | Au=1.0 AW=0.85 Ti=1.0
+   mp3                16k      | Au=1.0 AW=1.0 Ti=1.0
+   mp3                24k      | Au=1.0 AW=1.0 Ti=1.0
+   mp3                32k      | Au=1.0 AW=1.0 Ti=1.0
+   mp3                40k      | Au=1.0 AW=1.0 Ti=1.0
+   aac                8k       | Au=1.0 AW=0.95 Ti=1.0
+   aac                40k      | Au=1.0 AW=1.0 Ti=1.0
+   dynamic_compression t-10_r2  | Au=1.0 AW=1.0 Ti=1.0
+   dynamic_compression t-30_r8  | Au=1.0 AW=0.95 Ti=1.0
+   dynamic_expansion  t-10_r2  | Au=1.0 AW=1.0 Ti=1.0
+   dynamic_expansion  t-30_r8  | Au=1.0 AW=1.0 Ti=1.0
+   inverse_polarity   neg      | Au=0.12 AW=1.0 Ti=1.0
+   time_jitter        s0.01    | Au=1.0 AW=1.0 Ti=1.0
+   time_jitter        s0.5     | Au=1.0 AW=1.0 Ti=1.0
+   phase_shift        1        | Au=1.0 AW=1.0 Ti=1.0
+   phase_shift        -1000    | Au=1.0 AW=1.0 Ti=1.0
+
+ALL DONE -> /home/ksathwik/wm_compare/vox_out/vox_results.csv 
+Now run:  python vox_report.py
+wrote /home/ksathwik/wm_compare/vox_out/vox_report.html
+figures in /home/ksathwik/wm_compare/vox_out/figs
+done Mon Jun 29 19:17:24 EDT 2026

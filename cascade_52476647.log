@@ -1,0 +1,185 @@
+start Sun Jun 28 16:26:21 EDT 2026
+master: /home/ksathwik/wm_compare/audio/client_original_16k.wav  ->  /home/ksathwik/wm_compare/cascade_out/clean_master_22k.wav (22k) / /home/ksathwik/wm_compare/cascade_out/clean_master_16k.wav (16k)
+=== SELFTEST (solo embed -> detect round trip) ===
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+  AudioSeal  truth=0110111111100100  decoded=0110111111100100  bit_acc=1.000  conf=1.000  [OK ]
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:1691: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:838.)
+  current = float(metrics)
+  AWARE      truth=01101111111001000001  decoded=01101111111001000001  bit_acc=1.000  conf=0.998  [OK ]
+Removing weight norm...
+  Timbre     truth=1111001110  decoded=1111001110  bit_acc=1.000  conf=1.000  [OK ]
+=== SELFTEST PASSED ===
+master: /home/ksathwik/wm_compare/audio/client_original_16k.wav  ->  /home/ksathwik/wm_compare/cascade_out/clean_master_22k.wav (22k) / /home/ksathwik/wm_compare/cascade_out/clean_master_16k.wav (16k)
+resuming -- already complete: ['AU', 'AU_AW', 'AU_AW_TI', 'AU_TI', 'AW', 'AW_AU', 'AW_TI', 'TI', 'TI_AU', 'TI_AW']
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+Removing weight norm...
+controls done -> /home/ksathwik/wm_compare/cascade_out/cascade_controls.csv
+15 configs x 23 attacks  (5 to run)
+
+#### CONFIG AU_TI_AW  (AudioSeal -> Timbre -> AWARE)
+   stage1 after +AudioSeal | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   stage2 after +Timbre    | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   stage2 after +Timbre    | detect Timbre    -> bit_acc=1.0 conf=1.0
+/home/ksathwik/.conda/envs/wmcompare/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:1691: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:838.)
+  current = float(metrics)
+   stage3 after +AWARE     | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   stage3 after +AWARE     | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage3 after +AWARE     | detect AWARE     -> bit_acc=1.0 conf=0.998
+   attack baseline       | AU=1.0 TI=1.0 AW=1.0  pesq=3.137
+   attack mp3_128        | AU=1.0 TI=1.0 AW=1.0  pesq=3.137
+   attack mp3_64         | AU=1.0 TI=1.0 AW=1.0  pesq=3.121
+   attack aac_128        | AU=1.0 TI=1.0 AW=1.0  pesq=3.133
+   attack opus_64        | AU=1.0 TI=1.0 AW=1.0  pesq=3.12
+   attack resample_8k    | AU=1.0 TI=1.0 AW=1.0  pesq=2.889
+   attack lowpass_4k     | AU=0.94 TI=1.0 AW=1.0  pesq=3.209
+   attack highpass_500   | AU=0.94 TI=1.0 AW=1.0  pesq=3.174
+   attack volume_0.5     | AU=1.0 TI=1.0 AW=1.0  pesq=3.135
+   attack quantize_8bit  | AU=1.0 TI=1.0 AW=1.0  pesq=2.162
+   attack echo           | AU=1.0 TI=1.0 AW=1.0  pesq=2.045
+   attack sample_suppress | AU=1.0 TI=1.0 AW=1.0  pesq=3.073
+   attack noise_20db     | AU=1.0 TI=1.0 AW=1.0  pesq=1.863
+   attack noise_10db     | AU=0.88 TI=0.9 AW=1.0  pesq=1.244
+   attack noise_5db      | AU=0.88 TI=0.8 AW=0.95  pesq=1.127
+   attack tempo_up_10    | AU=0.62 TI=1.0 AW=1.0
+   attack tempo_down_10  | AU=0.75 TI=1.0 AW=1.0
+   attack denoise        | AU=0.62 TI=1.0 AW=1.0  pesq=3.49
+   attack crop_30s       | AU=1.0 TI=1.0 AW=0.8
+   attack crop_10s       | AU=1.0 TI=1.0 AW=0.55
+   attack crop_5s        | AU=1.0 TI=1.0 AW=0.7
+   attack crop_3s        | AU=1.0 TI=1.0 AW=0.65
+   attack pitch_up       | AU=0.69 TI=0.1 AW=0.6
+
+#### CONFIG AW_AU_TI  (AWARE -> AudioSeal -> Timbre)
+   stage1 after +AWARE     | detect AWARE     -> bit_acc=1.0 conf=0.998
+   stage2 after +AudioSeal | detect AWARE     -> bit_acc=1.0 conf=0.996
+   stage2 after +AudioSeal | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   stage3 after +Timbre    | detect AWARE     -> bit_acc=1.0 conf=0.989
+   stage3 after +Timbre    | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   stage3 after +Timbre    | detect Timbre    -> bit_acc=1.0 conf=1.0
+   attack baseline       | AW=1.0 AU=1.0 TI=1.0  pesq=3.265
+   attack mp3_128        | AW=1.0 AU=1.0 TI=1.0  pesq=3.264
+   attack mp3_64         | AW=1.0 AU=1.0 TI=1.0  pesq=3.247
+   attack aac_128        | AW=1.0 AU=1.0 TI=1.0  pesq=3.258
+   attack opus_64        | AW=1.0 AU=1.0 TI=1.0  pesq=3.242
+   attack resample_8k    | AW=1.0 AU=1.0 TI=1.0  pesq=2.988
+   attack lowpass_4k     | AW=1.0 AU=1.0 TI=1.0  pesq=3.331
+   attack highpass_500   | AW=1.0 AU=0.94 TI=1.0  pesq=3.297
+   attack volume_0.5     | AW=1.0 AU=1.0 TI=1.0  pesq=3.262
+   attack quantize_8bit  | AW=1.0 AU=1.0 TI=1.0  pesq=2.176
+   attack echo           | AW=1.0 AU=1.0 TI=1.0  pesq=2.074
+   attack sample_suppress | AW=1.0 AU=1.0 TI=1.0  pesq=3.191
+   attack noise_20db     | AW=1.0 AU=1.0 TI=1.0  pesq=1.878
+   attack noise_10db     | AW=1.0 AU=0.88 TI=1.0  pesq=1.244
+   attack noise_5db      | AW=0.95 AU=0.88 TI=0.8  pesq=1.128
+   attack tempo_up_10    | AW=1.0 AU=0.75 TI=1.0
+   attack tempo_down_10  | AW=1.0 AU=0.75 TI=1.0
+   attack denoise        | AW=1.0 AU=0.81 TI=1.0  pesq=3.605
+   attack crop_30s       | AW=0.75 AU=1.0 TI=1.0
+   attack crop_10s       | AW=0.55 AU=1.0 TI=1.0
+   attack crop_5s        | AW=0.5 AU=1.0 TI=1.0
+   attack crop_3s        | AW=0.65 AU=1.0 TI=1.0
+   attack pitch_up       | AW=0.55 AU=0.69 TI=0.2
+
+#### CONFIG AW_TI_AU  (AWARE -> Timbre -> AudioSeal)
+   stage1 after +AWARE     | detect AWARE     -> bit_acc=1.0 conf=0.998
+   stage2 after +Timbre    | detect AWARE     -> bit_acc=1.0 conf=0.992
+   stage2 after +Timbre    | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage3 after +AudioSeal | detect AWARE     -> bit_acc=1.0 conf=0.989
+   stage3 after +AudioSeal | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage3 after +AudioSeal | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   attack baseline       | AW=1.0 TI=1.0 AU=1.0  pesq=3.285
+   attack mp3_128        | AW=1.0 TI=1.0 AU=1.0  pesq=3.286
+   attack mp3_64         | AW=1.0 TI=1.0 AU=1.0  pesq=3.267
+   attack aac_128        | AW=1.0 TI=1.0 AU=1.0  pesq=3.277
+   attack opus_64        | AW=1.0 TI=1.0 AU=1.0  pesq=3.264
+   attack resample_8k    | AW=1.0 TI=1.0 AU=1.0  pesq=3.006
+   attack lowpass_4k     | AW=1.0 TI=1.0 AU=1.0  pesq=3.353
+   attack highpass_500   | AW=1.0 TI=1.0 AU=0.94  pesq=3.32
+   attack volume_0.5     | AW=1.0 TI=1.0 AU=1.0  pesq=3.28
+   attack quantize_8bit  | AW=1.0 TI=1.0 AU=1.0  pesq=2.171
+   attack echo           | AW=1.0 TI=1.0 AU=1.0  pesq=2.076
+   attack sample_suppress | AW=1.0 TI=1.0 AU=1.0  pesq=3.209
+   attack noise_20db     | AW=1.0 TI=1.0 AU=1.0  pesq=1.88
+   attack noise_10db     | AW=1.0 TI=0.9 AU=0.88  pesq=1.244
+   attack noise_5db      | AW=0.95 TI=0.8 AU=0.88  pesq=1.128
+   attack tempo_up_10    | AW=1.0 TI=1.0 AU=0.94
+   attack tempo_down_10  | AW=1.0 TI=1.0 AU=0.88
+   attack denoise        | AW=1.0 TI=1.0 AU=0.75  pesq=3.63
+   attack crop_30s       | AW=0.75 TI=1.0 AU=1.0
+   attack crop_10s       | AW=0.55 TI=1.0 AU=1.0
+   attack crop_5s        | AW=0.5 TI=1.0 AU=1.0
+   attack crop_3s        | AW=0.6 TI=1.0 AU=1.0
+   attack pitch_up       | AW=0.6 TI=0.1 AU=0.81
+
+#### CONFIG TI_AU_AW  (Timbre -> AudioSeal -> AWARE)
+   stage1 after +Timbre    | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage2 after +AudioSeal | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage2 after +AudioSeal | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   stage3 after +AWARE     | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage3 after +AWARE     | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   stage3 after +AWARE     | detect AWARE     -> bit_acc=1.0 conf=0.998
+   attack baseline       | TI=1.0 AU=1.0 AW=1.0  pesq=3.165
+   attack mp3_128        | TI=1.0 AU=1.0 AW=1.0  pesq=3.165
+   attack mp3_64         | TI=1.0 AU=1.0 AW=1.0  pesq=3.15
+   attack aac_128        | TI=1.0 AU=1.0 AW=1.0  pesq=3.159
+   attack opus_64        | TI=1.0 AU=1.0 AW=1.0  pesq=3.148
+   attack resample_8k    | TI=1.0 AU=1.0 AW=1.0  pesq=2.913
+   attack lowpass_4k     | TI=1.0 AU=0.94 AW=1.0  pesq=3.24
+   attack highpass_500   | TI=1.0 AU=0.81 AW=1.0  pesq=3.207
+   attack volume_0.5     | TI=1.0 AU=1.0 AW=1.0  pesq=3.164
+   attack quantize_8bit  | TI=1.0 AU=1.0 AW=1.0  pesq=2.155
+   attack echo           | TI=1.0 AU=0.94 AW=1.0  pesq=2.054
+   attack sample_suppress | TI=1.0 AU=1.0 AW=1.0  pesq=3.099
+   attack noise_20db     | TI=1.0 AU=1.0 AW=1.0  pesq=1.865
+   attack noise_10db     | TI=0.9 AU=0.88 AW=1.0  pesq=1.244
+   attack noise_5db      | TI=0.8 AU=0.88 AW=0.95  pesq=1.128
+   attack tempo_up_10    | TI=1.0 AU=0.75 AW=1.0
+   attack tempo_down_10  | TI=1.0 AU=0.62 AW=1.0
+   attack denoise        | TI=1.0 AU=0.62 AW=1.0  pesq=3.516
+   attack crop_30s       | TI=1.0 AU=1.0 AW=0.8
+   attack crop_10s       | TI=1.0 AU=0.94 AW=0.5
+   attack crop_5s        | TI=1.0 AU=0.94 AW=0.55
+   attack crop_3s        | TI=1.0 AU=0.88 AW=0.6
+   attack pitch_up       | TI=0.1 AU=0.81 AW=0.6
+
+#### CONFIG TI_AW_AU  (Timbre -> AWARE -> AudioSeal)
+   stage1 after +Timbre    | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage2 after +AWARE     | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage2 after +AWARE     | detect AWARE     -> bit_acc=1.0 conf=0.998
+   stage3 after +AudioSeal | detect Timbre    -> bit_acc=1.0 conf=1.0
+   stage3 after +AudioSeal | detect AWARE     -> bit_acc=1.0 conf=0.997
+   stage3 after +AudioSeal | detect AudioSeal -> bit_acc=1.0 conf=1.0
+   attack baseline       | TI=1.0 AW=1.0 AU=1.0  pesq=3.152
+   attack mp3_128        | TI=1.0 AW=1.0 AU=1.0  pesq=3.153
+   attack mp3_64         | TI=1.0 AW=1.0 AU=1.0  pesq=3.135
+   attack aac_128        | TI=1.0 AW=1.0 AU=1.0  pesq=3.148
+   attack opus_64        | TI=1.0 AW=1.0 AU=1.0  pesq=3.135
+   attack resample_8k    | TI=1.0 AW=1.0 AU=1.0  pesq=2.9
+   attack lowpass_4k     | TI=1.0 AW=1.0 AU=1.0  pesq=3.235
+   attack highpass_500   | TI=1.0 AW=1.0 AU=0.94  pesq=3.197
+   attack volume_0.5     | TI=1.0 AW=1.0 AU=1.0  pesq=3.149
+   attack quantize_8bit  | TI=1.0 AW=1.0 AU=1.0  pesq=2.145
+   attack echo           | TI=1.0 AW=1.0 AU=1.0  pesq=2.039
+   attack sample_suppress | TI=1.0 AW=1.0 AU=1.0  pesq=3.085
+   attack noise_20db     | TI=1.0 AW=1.0 AU=1.0  pesq=1.867
+   attack noise_10db     | TI=0.9 AW=1.0 AU=0.88  pesq=1.243
+   attack noise_5db      | TI=0.8 AW=0.95 AU=0.81  pesq=1.128
+   attack tempo_up_10    | TI=1.0 AW=1.0 AU=0.62
+   attack tempo_down_10  | TI=1.0 AW=1.0 AU=0.81
+   attack denoise        | TI=1.0 AW=1.0 AU=0.75  pesq=3.553
+   attack crop_30s       | TI=1.0 AW=0.8 AU=1.0
+   attack crop_10s       | TI=1.0 AW=0.5 AU=1.0
+   attack crop_5s        | TI=1.0 AW=0.6 AU=1.0
+   attack crop_3s        | TI=1.0 AW=0.65 AU=1.0
+   attack pitch_up       | TI=0.1 AW=0.6 AU=0.81
+
+ALL DONE. Now run:  python make_report.py
+/home/ksathwik/wm_compare/cascade/make_report.py:170: RuntimeWarning: Mean of empty slice
+  stoi = [np.nanmean(by_depth[d]['stoi']) for d in depths]
+wrote /home/ksathwik/wm_compare/cascade_out/report.html
+figures in /home/ksathwik/wm_compare/cascade_out/figs
+done Sun Jun 28 19:41:22 EDT 2026
