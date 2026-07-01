@@ -1,3 +1,5 @@
 cascade_out/wavs/
 cascade_out/*.wav
 vox_out/*.wav
+__pycache__/
+*.pyc
