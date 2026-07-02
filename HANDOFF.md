@@ -58,6 +58,11 @@ $WM_COMPARE_BASE/
   cascade/{service.py,user_key.py,cascade_lib.py}
 ```
 
+**Using the Timbre checkpoint:** just drop the `.pth.tar` into
+`TimbreWatermarking/watermarking_model/results/ckpt/pth/`. No path to configure and
+no code to change — the Timbre adapter automatically loads the newest `.pth.tar` in
+that folder. Set `WM_COMPARE_BASE` and `service.embed`/`detect` will find it.
+
 ## Setup
 
 ```bash
