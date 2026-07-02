@@ -76,14 +76,59 @@ python cascade/service.py detect some_watermarked.wav   # smoke test
   is 22.05 kHz PCM16 wav.
 * **Payload sizes:** AudioSeal 16-bit, AWARE 20-bit, Timbre 10-bit. Detection
   threshold used in the benchmark: `bit_acc >= 0.8`.
-* **Load once, keep warm.** First call loads weights and is slow. **AWARE embeds
-  via a 400-iteration optimisation — it is not instant** (order of seconds per
-  file). Consider an async/queue for embed requests.
+* **Load once, keep warm.** First call loads weights and is slow; cache the
+  adapters (`service.warmup()` at startup). See **Performance** below.
 * **Robustness:** see `cascade_out/report.html` and `vox_out/vox_report.html` for
   how each watermark survives 23 attacks + the VoxWatermark sweep. All three are
   strong except under aggressive pitch-shift.
 * **Redundancy:** because the same id is in all three, if any one detector reads
   cleanly you recover the user. `detect()` returns a per-model id + a consensus.
+
+## Performance — AWARE embedding is the bottleneck (by design)
+
+AudioSeal and Timbre embed with a **single forward pass** through a trained
+encoder — milliseconds per file. **AWARE has no trained encoder.** Per its paper
+(Algorithm 1), it embeds by running an **adversarial optimization loop for every
+file**: `num_iterations` (default **400**) gradient steps, each a full detector
+forward+backward in the STFT domain. So one AWARE embed is seconds–minutes,
+dominating the wall-clock of any "all three" request.
+
+| Model | Embed method | Speed |
+|---|---|---|
+| AudioSeal | one forward pass (trained encoder) | ~instant |
+| Timbre | one forward pass (trained encoder) | ~instant |
+| **AWARE** | **400-iter per-file optimization** | **slow (the bottleneck)** |
+
+Detection is cheap for all three (roughly one forward pass) — the cost is
+concentrated in AWARE **embedding**. Plan for it:
+
+* **Do embedding asynchronously** (job queue + progress), never a blocking
+  request — an AWARE embed can take many seconds on CPU.
+* **Use a GPU** for the embed service if available; that optimization loop is
+  exactly what GPUs accelerate (large speedup vs CPU).
+* **`num_iterations` is a tunable knob** (AWARE config in `aware/src/aware/cards/`):
+  fewer iterations = faster but weaker/lower-quality mark; more = slower, stronger.
+  Benchmark a value that meets your latency budget.
+* If embed latency is unacceptable and you don't need AWARE's specific robustness,
+  a subset (`models=("audioseal","timbre")`) embeds near-instantly and still gives
+  two independent watermarks carrying the same user id.
+
+## Dependencies (Python 3.12.10 verified)
+
+Validated on a clean **Python 3.12.10** env with **numpy 1.26.x** (pin `numpy<2`;
+the old model code is not verified against numpy 2). `environment.yml` is the
+Python 3.10 export; on 3.12 build a fresh env and install:
+
+```bash
+conda create -n wmcompare312 -c conda-forge python=3.12.10 -y   # 3.12.10 is on conda-forge, not defaults
+conda activate wmcompare312
+pip install "numpy<2" scipy soundfile librosa pyyaml pydub julius transformers audioseal
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -e ./aware        # AWARE's transitive deps (webrtcvad, resampy, ...) — easy to miss
+```
+Verify `python -c "import numpy; print(numpy.__version__)"` shows **1.26.x**, then
+run the smoke test. (`webrtcvad` needs a C compiler; use `webrtcvad-wheels` if it
+won't build.)
 
 ## Files that make up the deliverable
 
