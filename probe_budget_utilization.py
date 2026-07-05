@@ -11,6 +11,17 @@ Usage:
     python probe_budget_utilization.py <path_to_16k_mono_wav>
 """
 import sys
+import os
+
+# The repo keeps an (uninitialized) `aware/` submodule checkout at the repo
+# root. Since Python puts this script's own directory first on sys.path,
+# that empty `aware/` folder shadows the real, pip-installed `aware` package
+# as an empty namespace package -- `import aware` "succeeds" but
+# `import aware.utils` fails. Strip this script's directory from sys.path
+# before importing so the properly installed package (in site-packages) wins.
+_here = os.path.dirname(os.path.abspath(__file__))
+sys.path = [p for p in sys.path if os.path.abspath(p or ".") != _here]
+
 import numpy as np
 import librosa
 from aware.utils.models import load
