@@ -153,8 +153,15 @@ def main():
         stem = f'fail_{attack}_{label.replace(".","p")}'
         title = f'{attack} {label}   bit_acc={acc:.2f}  conf={conf:.2f}  [{"DETECTED" if det else "FAILED"}]'
         save_single(y2, SR_MASTER, title, stem + '.png', args.seconds, args.mel)
-        # write the listenable attacked clip (full length)
-        write_wav(os.path.join(OUTDIR, stem + '.wav'), y2, SR_MASTER)
+        # write listenable clips (full length): the SAME attack applied to the
+        # watermarked clip AND to the clean original, so you can A/B them.
+        write_wav(os.path.join(OUTDIR, stem + '_watermarked.wav'), y2, SR_MASTER)
+        try:
+            y2o = V.apply(attack, param, master, SR_MASTER)
+            if y2o is not None:
+                write_wav(os.path.join(OUTDIR, stem + '_original.wav'), y2o, SR_MASTER)
+        except Exception as e:
+            print(f'    (original-attacked skipped: {str(e)[:50]})', flush=True)
 
     # 5. montage: original + watermarked + each failing attack --------------
     panels = [('Original', master, None), ('AWARE watermarked', wm, acc0)]
