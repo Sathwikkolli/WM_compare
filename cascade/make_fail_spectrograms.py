@@ -125,6 +125,10 @@ def main():
     save_single(wm, SR_MASTER, f'AWARE watermarked  (bit_acc={acc0:.2f})',
                 '02_watermarked.png', args.seconds, args.mel)
 
+    # also write listenable wavs of the clean pair (full length, not cropped)
+    write_wav(os.path.join(OUTDIR, '01_original.wav'), master, SR_MASTER)
+    write_wav(os.path.join(OUTDIR, '02_watermarked.wav'), wm, SR_MASTER)
+
     # 3. watermark residual (amplified) -------------------------------------
     resid = wm - master
     amp = float(np.max(np.abs(master))) / (float(np.max(np.abs(resid))) + 1e-12)
@@ -146,9 +150,11 @@ def main():
         results.append((attack, label, param, y2, acc, conf, det))
         tag = 'FAIL' if not det else 'pass'
         print(f'  {attack:12s} {label:8s} bit_acc={acc:.3f} conf={conf:.3f} [{tag}]', flush=True)
+        stem = f'fail_{attack}_{label.replace(".","p")}'
         title = f'{attack} {label}   bit_acc={acc:.2f}  conf={conf:.2f}  [{"DETECTED" if det else "FAILED"}]'
-        save_single(y2, SR_MASTER, title,
-                    f'fail_{attack}_{label.replace(".","p")}.png', args.seconds, args.mel)
+        save_single(y2, SR_MASTER, title, stem + '.png', args.seconds, args.mel)
+        # write the listenable attacked clip (full length)
+        write_wav(os.path.join(OUTDIR, stem + '.wav'), y2, SR_MASTER)
 
     # 5. montage: original + watermarked + each failing attack --------------
     panels = [('Original', master, None), ('AWARE watermarked', wm, acc0)]
