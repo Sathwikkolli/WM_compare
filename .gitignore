@@ -3,3 +3,7 @@ cascade_out/*.wav
 vox_out/*.wav
 __pycache__/
 *.pyc
+
+# client production-pipeline audio (re-downloaded on the cluster from Dropbox)
+client_processed/
+client_stage_results.csv
