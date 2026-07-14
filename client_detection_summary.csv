@@ -1,0 +1,10 @@
+stage,processing,branch,aw_conf,detected,strength,bits
+02,Noise suppression (C-Vox),mono,0.7414,Yes,Strong,00101111111001100001
+03,Strip silence + fades,mono,0.7404,Yes,Strong,00101111111001100001
+04,EQ + compression + limiter,mono,0.5034,Yes,Weak,00111110111001100001
+05,Reverb + stereo (K-Stereo/D-Verb),stereo,0.4612,No,Borderline,00111110111001100001
+06,Stereo music bed added,stereo,0.0778,No,Gone,10011110111001000000
+07A,Resample 44.1k + 16-bit dither (of 04),mono,0.5035,Yes,Weak,00111110111001100001
+07B,Resample 44.1k + 16-bit dither (of 06),stereo,0.0778,No,Gone,10011110111001000000
+08A,256 kbps CBR MP3 (of 07A),mono,0.5036,Yes,Weak,00111110111001100001
+08B,256 kbps CBR MP3 (of 07B),stereo,0.0777,No,Gone,10011110111001000000
