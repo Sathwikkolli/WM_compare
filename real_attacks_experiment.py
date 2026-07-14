@@ -84,6 +84,7 @@ def main():
     for snr in SNRS:
         a = math.sqrt(Ps / (Pm * (10 ** (snr / 10.0))))
         mix = (y_wm + a * m).astype('float32')
+        cl.write_wav(os.path.join(DATA, f'mix_{snr:+03d}dB.wav'), mix, sr=SR)  # save for A/B listening
         conf, bits, bacc = adapter.detect(mix)
         det = 'DETECTED' if conf >= 0.5 else 'no'
         print(f'{snr:7d} {conf:7.4f} {bacc:8.4f} {det:>9s}')
