@@ -7,3 +7,8 @@ __pycache__/
 # client production-pipeline audio (re-downloaded on the cluster from Dropbox)
 client_processed/
 client_stage_results.csv
+
+# real-audio ablation experiment (re-downloaded on the cluster)
+real_audio/
+real_attacks_results.csv
+real_music_snr.png
