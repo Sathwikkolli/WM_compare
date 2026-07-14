@@ -1,0 +1,22 @@
+test,config,snr_db,conf,bit_acc,detected,source
+baseline,watermarked_speech,,1.0000,1.0000,DETECTED,real experiment (mean over trials)
+music_snr,+30dB,30,0.9998,1.0000,DETECTED,mean over trials
+music_snr,+25dB,25,0.9996,1.0000,DETECTED,mean over trials
+music_snr,+20dB,20,0.9986,1.0000,DETECTED,mean over trials
+music_snr,+15dB,15,0.9891,1.0000,DETECTED,mean over trials
+music_snr,+10dB,10,0.8970,0.9750,DETECTED,mean over trials
+music_snr,+6dB,6,0.6130,0.9250,DETECTED,mean over trials
+music_snr,+5dB,5,0.5062,0.9250,DETECTED,mean over trials
+music_threshold,conf=0.50 crossing,4.9,0.5000,,,validated AWARE breaking point (range 3.8-5.8 dB)
+music_snr,+4dB,4,0.4015,0.9250,no,mean over trials
+music_snr,+3.8dB,3.8,0.3811,0.9250,no,mean over trials
+music_snr,+3dB,3,0.2921,0.9000,no,mean over trials
+music_snr,+2dB,2,0.2029,0.8500,no,mean over trials
+music_snr,+1dB,1,0.1496,0.8250,no,mean over trials
+music_snr,0dB,0,0.1168,0.8000,no,mean over trials
+music_snr,-5dB,-5,0.0613,0.6500,no,mean over trials
+music_snr,-10dB,-10,0.0473,0.5500,no,mean over trials
+stereo,dualmono,,0.9999,1.0000,DETECTED,mean over trials (control)
+stereo,haas_12ms,,0.9928,1.0000,DETECTED,mean over trials (ffmpeg widener)
+stereo,stereowiden,,0.9962,1.0000,DETECTED,mean over trials (ffmpeg widener)
+client,Stage 06 (stereo music bed),-7,0.0778,,no,client production file (SNR estimated from Stage05 vs Stage06 loudness)
