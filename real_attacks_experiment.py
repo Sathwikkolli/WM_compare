@@ -29,7 +29,7 @@ MUSIC_RAW  = os.path.join(DATA, 'music_stereo.mp3')
 SPEECH_WAV = os.path.join(DATA, 'speech_25s_16k.wav')   # trimmed clean speech
 WM_WAV     = os.path.join(DATA, 'speech_wm.wav')        # AWARE-watermarked
 
-SNRS = [30, 25, 20, 15, 10, 5, 0, -5, -10]
+SNRS = [30, 25, 20, 15, 10, 6, 5, 4, 3.8, 3, 2, 1, 0, -5, -10]  # fine points near the threshold
 
 sys.path.insert(0, CASCADE)
 import cascade_lib as cl
@@ -84,10 +84,10 @@ def main():
     for snr in SNRS:
         a = math.sqrt(Ps / (Pm * (10 ** (snr / 10.0))))
         mix = (y_wm + a * m).astype('float32')
-        cl.write_wav(os.path.join(DATA, f'mix_{snr:+03d}dB.wav'), mix, sr=SR)  # save for A/B listening
+        cl.write_wav(os.path.join(DATA, f'mix_{snr:+05.1f}dB.wav'), mix, sr=SR)  # save for A/B listening
         conf, bits, bacc = adapter.detect(mix)
         det = 'DETECTED' if conf >= 0.5 else 'no'
-        print(f'{snr:7d} {conf:7.4f} {bacc:8.4f} {det:>9s}')
+        print(f'{snr:7.1f} {conf:7.4f} {bacc:8.4f} {det:>9s}')
         rows.append({'test': 'music_snr', 'config': f'{snr}dB', 'conf': round(float(conf), 4),
                      'bit_acc': round(float(bacc), 4), 'detected': det})
         if prev and thr is None and prev[1] >= 0.5 > conf:
@@ -128,7 +128,7 @@ def main():
     try:
         import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
         mus = [r for r in rows if r['test'] == 'music_snr']
-        xs = [int(r['config'][:-2]) for r in mus]
+        xs = [float(r['config'][:-2]) for r in mus]
         plt.figure(figsize=(6, 4))
         plt.plot(xs, [r['conf'] for r in mus], 'o-', label='detection conf')
         plt.plot(xs, [r['bit_acc'] for r in mus], 's--', label='bit accuracy')
