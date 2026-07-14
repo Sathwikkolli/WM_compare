@@ -22,12 +22,8 @@ BASE = os.environ.get('WM_COMPARE_BASE', os.path.expanduser('~/wm_compare'))
 CASCADE = os.path.join(BASE, 'cascade')
 DATA = os.path.join(BASE, 'real_audio'); os.makedirs(DATA, exist_ok=True)
 
-SPEECH_URL = "https://archive.org/download/stories_001_librivox/black_cat_poe_ty.mp3"
-MUSIC_URL  = "https://archive.org/download/MarchForHonor/March_For_Honor.mp3"
-SPEECH_RAW = os.path.join(DATA, 'speech_raw.mp3')
-MUSIC_RAW  = os.path.join(DATA, 'music_stereo.mp3')
-SPEECH_WAV = os.path.join(DATA, 'speech_25s_16k.wav')   # trimmed clean speech
-WM_WAV     = os.path.join(DATA, 'speech_wm.wav')        # AWARE-watermarked
+DEFAULT_SPEECH = "https://archive.org/download/stories_001_librivox/black_cat_poe_ty.mp3"
+DEFAULT_MUSIC  = "https://archive.org/download/MarchForHonor/March_For_Honor.mp3"
 
 SNRS = [30, 25, 20, 15, 10, 6, 5, 4, 3.8, 3, 2, 1, 0, -5, -10]  # fine points near the threshold
 
@@ -41,32 +37,55 @@ def sh(*a):
     subprocess.run(list(a), check=True)
 
 
-def ensure_inputs():
-    if not os.path.exists(SPEECH_RAW):
-        print('downloading speech (LibriVox)...'); sh('curl', '-L', '-s', '-o', SPEECH_RAW, SPEECH_URL)
-    if not os.path.exists(MUSIC_RAW):
-        print('downloading music (CC0)...'); sh('curl', '-L', '-s', '-o', MUSIC_RAW, MUSIC_URL)
-    if not os.path.exists(SPEECH_WAV):
+def get_arg(argv, flag, default):
+    return argv[argv.index(flag) + 1] if flag in argv else default
+
+
+def fetch(src, dst):
+    """Download src if it's a URL, else copy/point to the local file."""
+    if os.path.exists(dst):
+        return dst
+    if str(src).startswith('http'):
+        print(f'downloading {os.path.basename(dst)} ...'); sh('curl', '-L', '-s', '-o', dst, src)
+    else:                                   # local file: transcode/copy into place
+        sh('ffmpeg', '-y', '-loglevel', 'error', '-i', src, dst)
+    return dst
+
+
+def prep_speech(speech_src, P):
+    fetch(speech_src, P['speech_raw'])
+    if not os.path.exists(P['speech_wav']):
         # skip 20 s intro, take 25 s of speech, mono 16 kHz
         sh('ffmpeg', '-y', '-loglevel', 'error', '-ss', '20', '-t', '25',
-           '-i', SPEECH_RAW, '-ac', '1', '-ar', '16000', SPEECH_WAV)
+           '-i', P['speech_raw'], '-ac', '1', '-ar', '16000', P['speech_wav'])
 
 
-def widen(cfg_name, af):
+def widen(cfg_name, af, P):
     """Apply a real ffmpeg stereo widener to the watermarked speech, return path."""
-    out = os.path.join(DATA, f'wm_{cfg_name}.wav')
-    sh('ffmpeg', '-y', '-loglevel', 'error', '-i', WM_WAV, '-af', af, out)
+    out = os.path.join(DATA, f'{P["tag"]}_wm_{cfg_name}.wav')
+    sh('ffmpeg', '-y', '-loglevel', 'error', '-i', P['wm'], '-af', af, out)
     return out
 
 
-def main():
-    ensure_inputs()
+def main(argv):
+    speech_src = get_arg(argv, '--speech', DEFAULT_SPEECH)
+    music_src  = get_arg(argv, '--music',  DEFAULT_MUSIC)
+    tag        = get_arg(argv, '--tag', 'run1')
+    P = {'tag': tag,
+         'speech_raw': os.path.join(DATA, f'{tag}_speech_raw.mp3'),
+         'music_raw':  os.path.join(DATA, f'{tag}_music.mp3'),
+         'speech_wav': os.path.join(DATA, f'{tag}_speech_25s_16k.wav'),
+         'wm':         os.path.join(DATA, f'{tag}_speech_wm.wav')}
+    print(f'[{tag}] speech={speech_src}\n[{tag}] music ={music_src}\n')
+
+    prep_speech(speech_src, P)
+    fetch(music_src, P['music_raw'])
     adapter = cl.get_adapter('aware')
 
     print('embedding AWARE into real speech...')
-    y = cl.read_wav(SPEECH_WAV)
+    y = cl.read_wav(P['speech_wav'])
     y_wm = np.asarray(adapter.embed(y), dtype='float32')
-    cl.write_wav(WM_WAV, y_wm, sr=SR)
+    cl.write_wav(P['wm'], y_wm, sr=SR)
     c0, _, b0 = adapter.detect(y_wm)
     print(f'BASELINE  conf={c0:.4f}  bit_acc={b0:.4f}\n')
 
@@ -74,7 +93,7 @@ def main():
 
     # ---- TEST 1: music-bed SNR sweep --------------------------------------
     print('=== TEST 1: real music-bed SNR sweep ===')
-    m = cl.read_wav(MUSIC_RAW)                     # detector downmixes anyway -> mono music
+    m = cl.read_wav(P['music_raw'])                # detector downmixes anyway -> mono music
     if len(m) < len(y_wm):
         m = np.tile(m, int(np.ceil(len(y_wm) / len(m))))
     m = m[:len(y_wm)].astype('float32')
@@ -84,7 +103,7 @@ def main():
     for snr in SNRS:
         a = math.sqrt(Ps / (Pm * (10 ** (snr / 10.0))))
         mix = (y_wm + a * m).astype('float32')
-        cl.write_wav(os.path.join(DATA, f'mix_{snr:+05.1f}dB.wav'), mix, sr=SR)  # save for A/B listening
+        cl.write_wav(os.path.join(DATA, f'{tag}_mix_{snr:+05.1f}dB.wav'), mix, sr=SR)  # save for A/B listening
         conf, bits, bacc = adapter.detect(mix)
         det = 'DETECTED' if conf >= 0.5 else 'no'
         print(f'{snr:7.1f} {conf:7.4f} {bacc:8.4f} {det:>9s}')
@@ -107,7 +126,7 @@ def main():
     print(f'{"widener":14s} {"conf":>7s} {"bit_acc":>8s} {"detected":>9s}')
     for name, af in configs.items():
         try:
-            wav = widen(name, af)
+            wav = widen(name, af, P)
             yv = cl.read_wav(wav)                  # cl.read_wav downmixes stereo -> mono
             conf, bits, bacc = adapter.detect(yv.astype('float32'))
             det = 'DETECTED' if conf >= 0.5 else 'no'
@@ -117,7 +136,7 @@ def main():
         except Exception as e:
             print(f'{name:14s} ERROR: {e}')
 
-    out = os.path.join(BASE, 'real_attacks_results.csv')
+    out = os.path.join(BASE, f'real_attacks_results_{tag}.csv')
     with open(out, 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=['test', 'config', 'conf', 'bit_acc', 'detected'])
         w.writeheader(); w.writerows(rows)
@@ -137,12 +156,12 @@ def main():
             plt.axvline(thr, color='g', ls=':', lw=1, label=f'{thr:.1f} dB')
         plt.gca().invert_xaxis()
         plt.xlabel('speech-to-music SNR (dB)'); plt.ylabel('score')
-        plt.title('AWARE vs real music bed'); plt.legend(); plt.tight_layout()
-        p = os.path.join(BASE, 'real_music_snr.png'); plt.savefig(p, dpi=130)
+        plt.title(f'AWARE vs real music bed [{tag}]'); plt.legend(); plt.tight_layout()
+        p = os.path.join(BASE, f'real_music_snr_{tag}.png'); plt.savefig(p, dpi=130)
         print('plot:', p)
     except Exception as e:
         print('(plot skipped:', e, ')')
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main(sys.argv[1:]))

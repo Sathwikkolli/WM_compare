@@ -10,5 +10,5 @@ client_stage_results.csv
 
 # real-audio ablation experiment (re-downloaded on the cluster)
 real_audio/
-real_attacks_results.csv
-real_music_snr.png
+real_attacks_results*.csv
+real_music_snr*.png
