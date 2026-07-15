@@ -92,13 +92,19 @@ def main(argv):
     csv_in  = get_arg(argv, '--csv', EMILIA_CSV)
     model   = get_arg(argv, '--model', 'aware')     # aware | audioseal | timbre
 
+    # Timbre reports bit_acc AS its confidence (cascade_lib:318), and chance for a
+    # 10-bit payload is 0.5 -- so 0.5 would call random noise "detected". Use the
+    # vox benchmark's own convention (bit_acc >= 0.8 = survives) instead.
+    default_thresh = 0.8 if model == 'timbre' else 0.5
+    thresh = get_arg(argv, '--thresh', default_thresh, float)
+
     clips = pick_clips(csv_in, n_clips)
     if not clips:
         print('no usable clips found in', csv_in); return 1
-    print(f'model={model} | using {len(clips)} Emilia clips (>= {MIN_DUR}s), wet={wet}\n')
+    print(f'model={model} | {len(clips)} Emilia clips (>= {MIN_DUR}s) | wet={wet} | thresh={thresh}\n')
     if model == 'timbre':
-        print('NOTE: Timbre has no standalone detection prob (conf == bit_acc), '
-              'so the 0.5 "threshold" is not comparable to the other two.\n')
+        print('NOTE: Timbre conf == bit_acc (no standalone prob). Chance = 0.50 for its\n'
+              '      10-bit payload, so we use 0.80 (vox "survives" bar) as the threshold.\n')
 
     adapter = cl.get_adapter(model)
     per_config = {}     # config -> list of confs across clips
@@ -119,7 +125,7 @@ def main(argv):
             per_config.setdefault(cfg, []).append(float(conf))
             rows.append({'clip': name, 'config': cfg, 'conf': round(float(conf), 4),
                          'bit_acc': round(float(bacc), 4),
-                         'detected': 'DETECTED' if conf >= 0.5 else 'no'})
+                         'detected': 'DETECTED' if conf >= thresh else 'no'})
         print(f'      baseline={per_config["baseline"][-1]:.3f}  '
               f'echo1tap={per_config["bench_echo_1tap"][-1]:.3f}  '
               f'rt60_2.0={per_config["reverb_rt60_2.0"][-1]:.3f}')
@@ -132,7 +138,7 @@ def main(argv):
     summary = []
     for cfg in order:
         v = np.array(per_config[cfg])
-        det = 'DETECTED' if v.mean() >= 0.5 else 'no'
+        det = 'DETECTED' if v.mean() >= thresh else 'no'
         print(f'{cfg:20s} {v.mean():10.4f} {v.std():7.4f} {det:>9s}')
         summary.append({'config': cfg, 'mean_conf': round(float(v.mean()), 4),
                         'std': round(float(v.std()), 4), 'n_clips': len(v), 'detected': det})
@@ -141,12 +147,17 @@ def main(argv):
     thr, prev = None, None
     for rt in RT60S:
         c = float(np.mean(per_config[f'reverb_rt60_{rt}']))
-        if prev and thr is None and prev[1] >= 0.5 > c:
+        if prev and thr is None and prev[1] >= thresh > c:
             r1, c1 = prev; r2, c2 = rt, c
-            thr = r1 + (c1 - 0.5) * (r2 - r1) / (c1 - c2)
+            thr = r1 + (c1 - thresh) * (r2 - r1) / (c1 - c2)
         prev = (rt, c)
-    print('\n==> reverb threshold (conf=0.50):',
-          f'RT60 ~ {thr:.2f} s' if thr is not None else 'never crossed -- reverb does NOT break AWARE')
+    if thr is not None:
+        msg = f'RT60 ~ {thr:.2f} s'
+    elif float(np.mean(per_config[f'reverb_rt60_{RT60S[0]}'])) < thresh:
+        msg = f'already below {thresh} at the mildest reverb (RT60 {RT60S[0]}s) -- threshold is LOWER than tested'
+    else:
+        msg = f'never crossed -- reverb does NOT break {model} in this range'
+    print(f'\n==> reverb threshold (conf={thresh}):', msg)
 
     out = os.path.join(BASE, f'reverb_test_results_{model}.csv')
     with open(out, 'w', newline='') as f:
@@ -166,7 +177,7 @@ def main(argv):
         plt.errorbar(RT60S, ys, yerr=es, fmt='o-', capsize=3, label='dense reverb (real)')
         plt.axhline(np.mean(per_config['bench_echo_1tap']), color='orange', ls='--',
                     label='benchmark 1-tap echo')
-        plt.axhline(0.5, color='r', ls=':', lw=1, label='threshold 0.5')
+        plt.axhline(thresh, color='r', ls=':', lw=1, label=f'threshold {thresh}')
         plt.xlabel('RT60 (s)  -- bigger = more reverb'); plt.ylabel('detection conf')
         plt.title(f'{model} vs real reverb ({len(clips)} Emilia clips)')
         plt.ylim(0, 1.05); plt.legend(); plt.tight_layout()
