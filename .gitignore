@@ -29,3 +29,7 @@ music_removal*.png
 # stereo round-trip test (regenerated on the cluster)
 stereo_work/
 stereo_roundtrip_results.csv
+
+# WPE dereverb test (regenerated on the cluster)
+dereverb_wpe_results.csv
+dereverb_wpe*.png
