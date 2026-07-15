@@ -90,20 +90,24 @@ def main(argv):
     n_clips = get_arg(argv, '--n', 7, int)
     wet     = get_arg(argv, '--wet', 1.0, float)
     csv_in  = get_arg(argv, '--csv', EMILIA_CSV)
+    model   = get_arg(argv, '--model', 'aware')     # aware | audioseal | timbre
 
     clips = pick_clips(csv_in, n_clips)
     if not clips:
         print('no usable clips found in', csv_in); return 1
-    print(f'using {len(clips)} Emilia clips (>= {MIN_DUR}s), wet={wet}\n')
+    print(f'model={model} | using {len(clips)} Emilia clips (>= {MIN_DUR}s), wet={wet}\n')
+    if model == 'timbre':
+        print('NOTE: Timbre has no standalone detection prob (conf == bit_acc), '
+              'so the 0.5 "threshold" is not comparable to the other two.\n')
 
-    adapter = cl.get_adapter('aware')
+    adapter = cl.get_adapter(model)
     per_config = {}     # config -> list of confs across clips
     rows = []
 
     for i, path in enumerate(clips, 1):
         name = os.path.basename(path)
         y = cl.read_wav(path)
-        print(f'[{i}/{len(clips)}] embedding AWARE into {name} ...')
+        print(f'[{i}/{len(clips)}] embedding {model} into {name} ...')
         y_wm = np.asarray(adapter.embed(y), dtype='float32')
 
         tests = {'baseline': y_wm, 'bench_echo_1tap': bench_echo(y_wm)}
@@ -144,11 +148,11 @@ def main(argv):
     print('\n==> reverb threshold (conf=0.50):',
           f'RT60 ~ {thr:.2f} s' if thr is not None else 'never crossed -- reverb does NOT break AWARE')
 
-    out = os.path.join(BASE, 'reverb_test_results.csv')
+    out = os.path.join(BASE, f'reverb_test_results_{model}.csv')
     with open(out, 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=['clip', 'config', 'conf', 'bit_acc', 'detected'])
         w.writeheader(); w.writerows(rows)
-    out2 = os.path.join(BASE, 'reverb_test_summary.csv')
+    out2 = os.path.join(BASE, f'reverb_test_summary_{model}.csv')
     with open(out2, 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=['config', 'mean_conf', 'std', 'n_clips', 'detected'])
         w.writeheader(); w.writerows(summary)
@@ -164,9 +168,9 @@ def main(argv):
                     label='benchmark 1-tap echo')
         plt.axhline(0.5, color='r', ls=':', lw=1, label='threshold 0.5')
         plt.xlabel('RT60 (s)  -- bigger = more reverb'); plt.ylabel('detection conf')
-        plt.title(f'AWARE vs real reverb ({len(clips)} Emilia clips)')
+        plt.title(f'{model} vs real reverb ({len(clips)} Emilia clips)')
         plt.ylim(0, 1.05); plt.legend(); plt.tight_layout()
-        p = os.path.join(BASE, 'reverb_test.png'); plt.savefig(p, dpi=130)
+        p = os.path.join(BASE, f'reverb_test_{model}.png'); plt.savefig(p, dpi=130)
         print('plot:', p)
     except Exception as e:
         print('(plot skipped:', e, ')')
