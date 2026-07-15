@@ -12,3 +12,7 @@ client_stage_results.csv
 real_audio/
 real_attacks_results*.csv
 real_music_snr*.png
+
+# reverb test outputs (regenerated on the cluster)
+reverb_test_results.csv
+reverb_test.png
