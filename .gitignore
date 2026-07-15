@@ -16,3 +16,7 @@ real_music_snr*.png
 # reverb test outputs (regenerated on the cluster)
 reverb_test_results*.csv
 reverb_test*.png
+
+# music-bed test outputs (regenerated on the cluster)
+music_test_results.csv
+music_test*.png
