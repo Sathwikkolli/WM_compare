@@ -20,3 +20,8 @@ reverb_test*.png
 # music-bed test outputs (regenerated on the cluster)
 music_test_results.csv
 music_test*.png
+
+# demucs music-removal experiment (regenerated on the cluster)
+demucs_work/
+music_removal_results.csv
+music_removal*.png
