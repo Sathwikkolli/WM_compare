@@ -37,3 +37,4 @@ dereverb_wpe*.png
 # client music-removal (regenerated on the cluster)
 client_demucs/
 client_music_removal.csv
+client_correlation_all.csv
