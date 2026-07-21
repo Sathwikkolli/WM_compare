@@ -41,11 +41,11 @@ sys.path.insert(0, ROOT)                     # so `fsss` package imports resolve
 sys.path.insert(0, os.path.join(BASE, "cascade"))   # vox_attacks lives here
 
 try:
-    from fsss.salient import find_salient_points
     from fsss.match import align_lag, match_points
+    from fsss.detectors import DETECTORS
 except ImportError:                          # running as a plain script inside fsss/
-    from salient import find_salient_points
     from match import align_lag, match_points
+    from detectors import DETECTORS
 
 import vox_attacks   # cascade/vox_attacks.py (VOX_GRID, apply, strength_x)
 
@@ -70,7 +70,7 @@ LOCKED_ATTACKS = [
 ]
 
 ROW_FIELDS = [
-    "track", "clip", "attack", "param", "strength_x",
+    "detector", "track", "clip", "attack", "param", "strength_x",
     "hit_rate", "false_alarm", "median_jitter_ms",
     "n_clean", "n_attacked", "n_matched", "lag_ms", "status",
 ]
@@ -114,17 +114,38 @@ def wilson(k, n, z=1.96):
     return (center - half, center + half)
 
 
+# --- detector availability -------------------------------------------------- #
+def build_detectors(names):
+    """Return {name: fn} for the requested detectors that actually work here.
+    Probes each on 2 s of noise so a missing dep is reported once, not per clip."""
+    probe = (np.random.default_rng(0).standard_normal(2 * WORK_SR) * 0.1).astype("float32")
+    out = {}
+    for n in names:
+        fn = DETECTORS.get(n)
+        if fn is None:
+            print(f"[detector] unknown '{n}' -- skipping")
+            continue
+        try:
+            fn(probe, WORK_SR)
+            out[n] = fn
+            print(f"[detector] {n}: available")
+        except Exception as e:
+            print(f"[detector] {n}: UNAVAILABLE ({type(e).__name__}: {e})")
+    return out
+
+
 # --- Track 1: Vox attacks x Emilia ------------------------------------------ #
-def run_track1(clips, writer, pooled):
+def run_track1(clips, detectors_map, writer, pooled):
     for ci, path in enumerate(clips):
         try:
             y = load_16k(path)
         except Exception as e:
             print(f"[track1] skip {path}: {e}")
             continue
-        clean_pts = find_salient_points(y, WORK_SR)
         clip_name = os.path.basename(path)
-        print(f"[track1] {ci+1}/{len(clips)} {clip_name}  ({len(clean_pts)} pts)")
+        clean = {dn: fn(y, WORK_SR) for dn, fn in detectors_map.items()}
+        print(f"[track1] {ci+1}/{len(clips)} {clip_name}  "
+              + " ".join(f"{dn}:{len(p)}" for dn, p in clean.items()))
 
         for attack in LOCKED_ATTACKS:
             for label, param in vox_attacks.VOX_GRID.get(attack, []):
@@ -133,24 +154,26 @@ def run_track1(clips, writer, pooled):
                 except Exception as e:
                     y2 = None
                     print(f"    {attack}/{label}: ERROR {e}")
-                if y2 is None:                       # missing dep / unavailable
-                    writer.writerow(_row("track1", clip_name, attack, label, param,
-                                         status="SKIP"))
+                if y2 is None:                       # attack unavailable -> SKIP all detectors
+                    for dn in detectors_map:
+                        writer.writerow(_row(dn, "track1", clip_name, attack, label, param,
+                                             status="SKIP"))
                     continue
 
-                att_pts = find_salient_points(y2, WORK_SR)
+                # alignment is detector-independent: compute once per attack
                 if attack == "time_stretch":
                     scale, lag = float(param), 0     # known warp
                 else:
                     scale, lag = 1.0, align_lag(y, y2, WORK_SR)
-                m = match_points(clean_pts, att_pts, WORK_SR, w_ms=W_MS, scale=scale, lag=lag)
-                writer.writerow(_row("track1", clip_name, attack, label, param, m, lag))
-                # pool successes/trials per (attack,param) for the summary
-                key = (attack, label)
-                agg = pooled.setdefault(key, [0, 0, 0])   # matched, clean, n_clips
-                agg[0] += m["n_matched"]
-                agg[1] += m["n_clean"]
-                agg[2] += 1
+
+                for dn, fn in detectors_map.items():
+                    att_pts = fn(y2, WORK_SR)
+                    m = match_points(clean[dn], att_pts, WORK_SR, w_ms=W_MS, scale=scale, lag=lag)
+                    writer.writerow(_row(dn, "track1", clip_name, attack, label, param, m, lag))
+                    agg = pooled.setdefault((dn, attack, label), [0, 0, 0])  # matched, clean, n_clips
+                    agg[0] += m["n_matched"]
+                    agg[1] += m["n_clean"]
+                    agg[2] += 1
 
 
 # --- Track 2: METAPXYL real stages ------------------------------------------ #
@@ -185,7 +208,7 @@ def _stage_key(path):
     return float(num) if num else 999.0
 
 
-def run_track2(writer, ref_override=None):
+def run_track2(detectors_map, writer, ref_override=None):
     files = ensure_client_files()
     if not files:
         print("[track2] no client files found; skipping")
@@ -196,7 +219,7 @@ def run_track2(writer, ref_override=None):
     print("[track2] NOTE: a single global lag cannot fully align stages with "
           "interior strip-silence cuts; jitter/hit for those is approximate.")
     ref = load_16k(ref_path)
-    ref_pts = find_salient_points(ref, WORK_SR)
+    ref_pts = {dn: fn(ref, WORK_SR) for dn, fn in detectors_map.items()}
 
     for path in files:
         if path == ref_path:
@@ -207,22 +230,24 @@ def run_track2(writer, ref_override=None):
         except Exception as e:
             print(f"[track2] skip {stage}: {e}")
             continue
-        att_pts = find_salient_points(att, WORK_SR)
-        lag = align_lag(ref, att, WORK_SR)
-        m = match_points(ref_pts, att_pts, WORK_SR, w_ms=W_MS, scale=1.0, lag=lag)
-        writer.writerow(_row("metapxyl", os.path.basename(ref_path), "stage", stage, stage, m, lag))
-        print(f"[track2] {stage:32s} hit={m['hit_rate']:.2f} "
-              f"jitter={m['median_jitter_ms']:.1f}ms lag={lag/WORK_SR*1000:.0f}ms")
+        lag = align_lag(ref, att, WORK_SR)           # detector-independent
+        for dn, fn in detectors_map.items():
+            att_pts = fn(att, WORK_SR)
+            m = match_points(ref_pts[dn], att_pts, WORK_SR, w_ms=W_MS, scale=1.0, lag=lag)
+            writer.writerow(_row(dn, "metapxyl", os.path.basename(ref_path),
+                                 "stage", stage, stage, m, lag))
+            print(f"[track2] {dn:12s} {stage:28s} hit={m['hit_rate']:.2f} "
+                  f"jitter={m['median_jitter_ms']:.1f}ms lag={lag/WORK_SR*1000:.0f}ms")
 
 
 # --- row builder ------------------------------------------------------------ #
-def _row(track, clip, attack, label, param, m=None, lag=0, status="OK"):
+def _row(detector, track, clip, attack, label, param, m=None, lag=0, status="OK"):
     try:
         sx = vox_attacks.strength_x(attack, param)
     except Exception:
         sx = ""
-    r = dict(track=track, clip=clip, attack=attack, param=label, strength_x=sx,
-             lag_ms=round(lag / WORK_SR * 1000.0, 2), status=status)
+    r = dict(detector=detector, track=track, clip=clip, attack=attack, param=label,
+             strength_x=sx, lag_ms=round(lag / WORK_SR * 1000.0, 2), status=status)
     if m is None:
         r.update(hit_rate="", false_alarm="", median_jitter_ms="",
                  n_clean="", n_attacked="", n_matched="")
@@ -246,6 +271,11 @@ def main(argv):
     n_clips = get_arg(argv, "--n", N_CLIPS, int)
     csv_in = get_arg(argv, "--csv", EMILIA_CSV)
     ref = get_arg(argv, "--ref", None)
+    det_arg = get_arg(argv, "--detector", ",".join(DETECTORS))
+    detectors_map = build_detectors([d.strip() for d in det_arg.split(",") if d.strip()])
+    if not detectors_map:
+        print("no available detectors; aborting")
+        return
 
     os.makedirs(OUT_DIR, exist_ok=True)
     rows_path = os.path.join(OUT_DIR, "exp_a_rows.csv")
@@ -261,21 +291,21 @@ def main(argv):
             print(f"[track1] {len(clips)} Emilia clips from {csv_in}")
             if not clips:
                 print(f"[track1] WARNING: no clips found in {csv_in}")
-            run_track1(clips, writer, pooled)
+            run_track1(clips, detectors_map, writer, pooled)
 
         if do2:
-            run_track2(writer, ref_override=ref)
+            run_track2(detectors_map, writer, ref_override=ref)
 
-    # summary: pooled hit rate + Wilson CI per (attack, param) over all clips
+    # summary: pooled hit rate + Wilson CI per (detector, attack, param) over all clips
     if pooled:
         with open(summ_path, "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["attack", "param", "n_clips", "matched", "clean",
+            w.writerow(["detector", "attack", "param", "n_clips", "matched", "clean",
                         "hit_rate", "wilson_lo", "wilson_hi"])
-            for (attack, label), (matched, clean, nclip) in sorted(pooled.items()):
+            for (det, attack, label), (matched, clean, nclip) in sorted(pooled.items()):
                 hr = matched / clean if clean else float("nan")
                 lo, hi = wilson(matched, clean)
-                w.writerow([attack, label, nclip, matched, clean,
+                w.writerow([det, attack, label, nclip, matched, clean,
                             round(hr, 4), round(lo, 4), round(hi, 4)])
         print(f"\nwrote {summ_path}")
     print(f"wrote {rows_path}")
