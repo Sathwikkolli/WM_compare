@@ -54,10 +54,9 @@ ATTACKS = ["dynamic_compression", "echo", "mp3", "quantization", "lowpass", "gau
 # (delta = coeff * 10**(-tolerance_db/20)). Stock uses 6; the staircase writes
 # fewer bins so it needs more per-bin strength -> lower (even negative) tolerance.
 CONFIGS = [
-    ("N2_t3",  dict(n_bands=2, tolerance_db=3)),
-    ("N2_t0",  dict(n_bands=2, tolerance_db=0)),
-    ("N2_t-6", dict(n_bands=2, tolerance_db=-6)),
-    ("N4_t0",  dict(n_bands=4, tolerance_db=0)),
+    ("N2_t3",  dict(n_bands=2, tolerance_db=3)),    # near-stock quality, detectable
+    ("N2_t0",  dict(n_bands=2, tolerance_db=0)),    # louder, more margin
+    ("N2_t-6", dict(n_bands=2, tolerance_db=-6)),   # loudest, most robust
 ]
 
 
