@@ -49,10 +49,15 @@ OUT_DIR = os.path.join(BASE, "fsss_out")
 # METAPXYL-proxy everyday-edit chain (programmatic equivalents in vox_attacks)
 ATTACKS = ["dynamic_compression", "echo", "mp3", "quantization", "lowpass", "gaussian_noise"]
 
-# key-driven, fixed-segment (no librosa) configs to embed
+# key-driven, fixed-segment (no librosa) configs to embed.
+# tolerance_db is an IMPERCEPTIBILITY dial: LOWER = louder/stronger watermark
+# (delta = coeff * 10**(-tolerance_db/20)). Stock uses 6; the staircase writes
+# fewer bins so it needs more per-bin strength -> lower (even negative) tolerance.
 CONFIGS = [
-    ("fixed_N2_t12", dict(n_bands=2, tolerance_db=12)),
-    ("fixed_N4_t12", dict(n_bands=4, tolerance_db=12)),
+    ("N2_t3",  dict(n_bands=2, tolerance_db=3)),
+    ("N2_t0",  dict(n_bands=2, tolerance_db=0)),
+    ("N2_t-6", dict(n_bands=2, tolerance_db=-6)),
+    ("N4_t0",  dict(n_bands=4, tolerance_db=0)),
 ]
 
 
@@ -71,6 +76,7 @@ def main(argv):
     clip = get_arg(argv, "--clip", None)
     key = get_arg(argv, "--key", "thesis")
     seed = get_arg(argv, "--seed", 0, int)
+    clean_only = "--clean" in argv           # skip attacks; just find the detectable strength
     if clip is None:
         clips = pick_clips(EMILIA_CSV, 1)
         if not clips:
@@ -106,6 +112,9 @@ def main(argv):
         print(f"  clean            bit_acc={acc:.3f} conf={conf:.3f} PESQ={pesq:.3f}")
         writer.writerow([cname, "clean", "", round(acc, 4), round(float(conf), 4),
                          int(conf >= 0.5)])
+
+        if clean_only:                        # fast strength-finding: no attacks
+            continue
 
         # attack sweep
         for attack in ATTACKS:
