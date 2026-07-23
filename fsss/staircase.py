@@ -47,9 +47,15 @@ class StaircaseAWAREEmbedder(AWAREEmbedder):
     # ---- construction ------------------------------------------------------ #
     @classmethod
     def from_embedder(cls, base, key, n_bands=4, band_range=(500, 4000),
-                      min_seg_s=0.3, anchor_rate=3.5, anchor="librosa_flux"):
+                      min_seg_s=0.3, anchor_rate=3.5, anchor="librosa_flux",
+                      segment_mode="librosa", segment_len_s=0.5, tolerance_db=None):
         """Wrap an already-loaded AWAREEmbedder, copying all its state (detector,
-        pipelines, optimizer cfg, ...) so we never rebuild the config/cards."""
+        pipelines, optimizer cfg, ...) so we never rebuild the config/cards.
+
+        segment_mode: "librosa" (anchor-driven hops) or "fixed" (equal
+        segment_len_s chunks, no content analysis). tolerance_db overrides the
+        base perceptual budget (louder watermark) when provided.
+        """
         obj = cls.__new__(cls)
         obj.__dict__.update(base.__dict__)
         obj.key = key.encode() if isinstance(key, str) else key
@@ -58,6 +64,10 @@ class StaircaseAWAREEmbedder(AWAREEmbedder):
         obj.min_seg_s = float(min_seg_s)
         obj.anchor_rate = float(anchor_rate)
         obj.anchor = anchor
+        obj.segment_mode = segment_mode
+        obj.segment_len_s = float(segment_len_s)
+        if tolerance_db is not None:
+            obj.tolerance_db = float(tolerance_db)
         return obj
 
     # ---- the thesis contribution: the staircase mask ----------------------- #
@@ -80,7 +90,12 @@ class StaircaseAWAREEmbedder(AWAREEmbedder):
         return rows
 
     def _segments(self, audio, sampling_rate, n_frames):
-        """Anchor-defined frame segments, merging any shorter than min_seg_s."""
+        """Frame segments for the hop schedule. 'fixed' = equal segment_len_s
+        chunks (no content analysis); 'librosa' = anchor-defined segments."""
+        if getattr(self, "segment_mode", "librosa") == "fixed":
+            L = max(1, int(self.segment_len_s * sampling_rate / self.hop_length))
+            return [(s, min(s + L, n_frames)) for s in range(0, n_frames, L)]
+
         anchors = np.asarray(DETECTORS[self.anchor](audio, sampling_rate,
                                                      target_rate=self.anchor_rate))
         frames = sorted(set(int(a) // self.hop_length for a in anchors
