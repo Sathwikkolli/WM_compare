@@ -111,6 +111,8 @@ def main(argv):
     band = parse_band(get_arg(argv, "--band", "500-4000"))
     attacks = get_list(argv, "--attacks", DEFAULT_ATTACKS, str)
     control = "--no-control" not in argv
+    pesq_only = "--pesq-only" in argv          # skip attacks, PESQ + clean only (fast)
+    do_pesq = pesq_only or "--pesq" in argv
 
     clips = pick_clips(EMILIA_CSV, nclips)
     if not clips:
@@ -120,6 +122,16 @@ def main(argv):
     bits = np.random.default_rng(seed).integers(0, 2, size=WM_BITS, dtype=np.int32)
 
     embedder, detector = load()
+
+    pesq_metric = None
+    if do_pesq:
+        try:
+            from aware.metrics.audio import PESQ
+            pesq_metric = PESQ()
+        except Exception as e:
+            print(f"PESQ unavailable ({e}); continuing without it")
+            do_pesq = False
+
     stock_band = tuple(int(x) for x in embedder.embedding_bands)
     stock_tol = float(getattr(embedder, "tolerance_db", float("nan")))
 
@@ -146,10 +158,11 @@ def main(argv):
     fout = open(csv_path, "w", newline="")
     writer = csv.writer(fout)
     writer.writerow(["clip", "config", "band", "tol", "attack", "param",
-                     "bit_acc", "conf", "detected"])
+                     "bit_acc", "conf", "detected", "pesq"])
 
     # (config, attack) -> list of (acc, det)
     agg = {}
+    pesq_agg = {c["name"]: [] for c in configs}   # config -> [clean PESQ per clip]
 
     def rec(cn, atk, acc, det):
         agg.setdefault((cn, atk), []).append((acc, det))
@@ -166,12 +179,25 @@ def main(argv):
             except Exception as e:
                 print(f"    {cn:10s} EMBED FAILED: {e}")
                 continue
+            bandstr = f"{cfg['band'][0]}-{cfg['band'][1]}"
             pat, conf = detect_watermark(wm, WORK_SR, detector)
             acc = bit_acc(bits, pat)
+            pv = float("nan")
+            if do_pesq:
+                try:
+                    m = min(len(wm), len(audio))
+                    pv = float(pesq_metric(wm[:m], audio[:m], WORK_SR))
+                    pesq_agg[cn].append(pv)
+                except Exception as e:
+                    print(f"    {cn:10s} PESQ failed: {e}")
             rec(cn, "clean", acc, int(conf >= DET_CONF))
-            writer.writerow([ci, cn, f"{cfg['band'][0]}-{cfg['band'][1]}", cfg["tol"],
-                             "clean", "", round(acc, 4), round(float(conf), 4),
-                             int(conf >= DET_CONF)])
+            writer.writerow([ci, cn, bandstr, cfg["tol"], "clean", "", round(acc, 4),
+                             round(float(conf), 4), int(conf >= DET_CONF),
+                             "" if np.isnan(pv) else round(pv, 4)])
+            if pesq_only:
+                print(f"    {cn:10s} clean  acc={acc:.3f}  conf={float(conf):.3f}  "
+                      f"PESQ={pv:.3f}")
+                continue
             for atk in attacks:
                 for label, param in vox_attacks.VOX_GRID.get(atk, []):
                     try:
@@ -183,13 +209,33 @@ def main(argv):
                     pat, conf = detect_watermark(wa, WORK_SR, detector)
                     acc = bit_acc(bits, pat)
                     rec(cn, atk, acc, int(conf >= DET_CONF))
-                    writer.writerow([ci, cn, f"{cfg['band'][0]}-{cfg['band'][1]}",
-                                     cfg["tol"], atk, label, round(acc, 4),
-                                     round(float(conf), 4), int(conf >= DET_CONF)])
+                    writer.writerow([ci, cn, bandstr, cfg["tol"], atk, label,
+                                     round(acc, 4), round(float(conf), 4),
+                                     int(conf >= DET_CONF), ""])
     fout.close()
 
     # ----------------------------------------------------------------------- #
     cfg_names = [c["name"] for c in configs]
+
+    def pesq_mean(cn):
+        vals = [v for v in pesq_agg.get(cn, []) if not np.isnan(v)]
+        return float(np.mean(vals)) if vals else float("nan")
+
+    if do_pesq:
+        print("\n" + "=" * 60)
+        print("CLEAN PESQ  (watermarked vs original, mean over clips; higher = more "
+              "imperceptible)")
+        for c in configs:
+            cn = c["name"]
+            print(f"  {cn:10s} band={c['band'][0]}-{c['band'][1]:<5d} tol={c['tol']:>4}"
+                  f"   PESQ={pesq_mean(cn):.3f}")
+        print("  (loudness check: stock tol6 should be highest; n1_wide tol-6 full-band "
+              "lowest; staircase tol-6 hop in between — hopping perturbs 1/N bins/frame.)")
+
+    if pesq_only:
+        print("\n(--pesq-only: attacks skipped)")
+        print(f"wrote {csv_path}")
+        return
 
     def det_total(cn, atk):
         rows = agg.get((cn, atk), [])
