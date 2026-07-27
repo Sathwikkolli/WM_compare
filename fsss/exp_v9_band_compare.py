@@ -44,7 +44,7 @@ import vox_attacks
 from fsss.exp_a_repeatability import load_16k, pick_clips, EMILIA_CSV, WORK_SR
 
 WM_BITS = 20
-BANDS = [("orig_1k4k", (1000, 4000)), ("wide_500_4k", (500, 4000))]
+DEFAULT_BANDS = [(1000, 4000), (500, 4000), (500, 6000), (500, 8000)]
 DEFAULT_TOLS = [6.0, 3.0, 0.0, -3.0, -6.0]
 DEFAULT_ATTACKS = ["mp3", "lowpass", "highpass", "gaussian_noise"]   # highpass = differentiator
 DET_CONF = 0.5
@@ -61,6 +61,18 @@ def get_list(argv, flag, default, cast):
     return default
 
 
+def get_bands(argv):
+    """--bands 1000-4000,500-4000,500-6000,500-8000 -> [(lo,hi), ...]."""
+    if "--bands" in argv:
+        spec = argv[argv.index("--bands") + 1]
+        out = []
+        for tok in spec.split(","):
+            lo, hi = tok.split("-")
+            out.append((int(lo), int(hi)))
+        return out
+    return DEFAULT_BANDS
+
+
 def bit_acc(bits, pattern):
     p = np.asarray(pattern).astype(int).ravel()
     b = np.asarray(bits).astype(int).ravel()
@@ -74,6 +86,7 @@ def main(argv):
     nclips = get_arg(argv, "--nclips", 3, int)
     tols = get_list(argv, "--tols", DEFAULT_TOLS, float)
     attacks = get_list(argv, "--attacks", DEFAULT_ATTACKS, str)
+    bands = [(f"{lo}-{hi}", (lo, hi)) for (lo, hi) in get_bands(argv)]
 
     clips = pick_clips(EMILIA_CSV, nclips)
     if not clips:
@@ -83,7 +96,7 @@ def main(argv):
     bits = np.random.default_rng(seed).integers(0, 2, size=WM_BITS, dtype=np.int32)
 
     print(f"clips    : {len(audios)}  (5s each)")
-    print(f"bands    : {[b[0]+str(b[1]) for b in BANDS]}")
+    print(f"bands    : {[bn for bn, _ in bands]}")
     print(f"tols     : {tols}   (lower = louder/stronger)")
     print(f"attacks  : {attacks}   (highpass = the key band differentiator)")
     print("PESQ     : skipped (per request)\n")
@@ -105,7 +118,7 @@ def main(argv):
 
     for ci, (clip, audio) in enumerate(zip(clips, audios)):
         print(f"clip {ci+1}/{len(audios)}: {os.path.basename(clip)}")
-        for band_name, band in BANDS:
+        for band_name, band in bands:
             embedder.embedding_bands = band
             detector.embedding_bands = band          # <-- the fix: detector matches embedder
             for tol in tols:
@@ -145,23 +158,27 @@ def main(argv):
         return float(np.mean(accs)), dets, len(rows)
 
     rowlabels = ["clean"] + attacks
+    names = [bn for bn, _ in bands]
+    W = 14
     for tol in tols:
-        print("\n" + "#" * 62)
-        print(f"###  tolerance = {tol}   (orig 1000-4000   vs   wide 500-4000)")
-        print("#" * 62)
-        print(f"  {'metric':10s}   {'orig acc':>8s} {'orig det':>9s}   {'wide acc':>8s} {'wide det':>9s}")
+        width = 12 + W * len(names)
+        print("\n" + "#" * width)
+        print(f"###  tolerance = {tol}    cell = detected/total  mean_bit_acc")
+        print("#" * width)
+        print(f"  {'metric':10s}" + "".join(f"{n:>{W}s}" for n in names))
         for attack in rowlabels:
-            oa, od, on = stats("orig_1k4k", tol, attack)
-            wa, wd, wn = stats("wide_500_4k", tol, attack)
-            flag = "  <-- highpass strips 500-1000" if attack == "highpass" else ""
-            print(f"  {attack:10s}   {oa:8.3f} {od:>4d}/{on:<4d}   {wa:8.3f} {wd:>4d}/{wn:<4d}{flag}")
+            line = f"  {attack:10s}"
+            for bn in names:
+                a, d, t = stats(bn, tol, attack)
+                line += f"{d:>2d}/{t:<2d} {a:4.2f}".rjust(W)
+            print(line)
 
-    print("\n" + "=" * 62)
+    print("\n" + "=" * width)
     print(f"wrote {csv_path}")
-    print("read: 'det' = # detected (conf>=0.5) out of clips x strengths. Compare "
-          "orig vs wide per tolerance. Expect: wide detects clean once tol is low "
-          "enough (now that the DETECTOR sees 500-1000 too); wide should lose more "
-          "under HIGHPASS (it removes the 500-1000 energy).")
+    print("read: all bands share the low edge 500 except '1000-4000'. Expect wider "
+          "bands (500-6000/8000) to lose under MP3 & LOWPASS (those strip >4kHz), and "
+          "the 500-* bands to lose under HIGHPASS (strips 500-1000). Clean should stay "
+          "1.0 for all now that the detector band matches.")
 
 
 if __name__ == "__main__":
