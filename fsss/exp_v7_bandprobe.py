@@ -96,7 +96,15 @@ def main(argv):
     step = get_arg(argv, "--step", 500, int)
     attacks = get_list(argv, "--attacks", [], str)
 
-    windows = [(f, f + width) for f in range(start, stop, step) if f + width <= stop + 1]
+    widths = get_list(argv, "--widths", None, int)
+    center = get_arg(argv, "--center", 2500, int)
+    if widths:                                    # centered WIDTH sweep (find readable threshold)
+        nyq = WORK_SR // 2 - 1
+        windows = [(max(50, center - w // 2), min(nyq, center + w // 2)) for w in widths]
+        mode_desc = f"centered WIDTH-sweep at {center} Hz, widths {widths} Hz"
+    else:                                         # single-width POSITION slide (default)
+        windows = [(f, f + width) for f in range(start, stop, step) if f + width <= stop + 1]
+        mode_desc = f"single {width} Hz band, POSITION slide {start}-{stop} Hz (step {step})"
 
     if clip is None:
         clips = pick_clips(EMILIA_CSV, 1)
@@ -110,8 +118,7 @@ def main(argv):
 
     print(f"clip     : {clip}")
     print(f"duration : {len(audio)/WORK_SR:.2f}s   tol={tol}   key='{key}'")
-    print(f"probing  : single {width} Hz band swept {start}-{stop} Hz (step {step}), "
-          f"{len(windows)} windows")
+    print(f"probing  : {mode_desc}  ({len(windows)} windows)")
     print("NOTE: detector Mel fmin=0 fmax=8000 (sees all), trained band [1000,4000].")
 
     embedder, detector = load()
