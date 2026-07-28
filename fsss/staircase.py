@@ -178,6 +178,7 @@ class StaircaseAWAREEmbedder(AWAREEmbedder):
 
         best_loss = float("inf")
         best_coeffs = coeffs.clone()
+        loss_trace = []
         for iteration in range(self.num_iterations):
             optimizer.zero_grad()
             watermarked_magnitude = stft_magnitude.clone()
@@ -192,12 +193,66 @@ class StaircaseAWAREEmbedder(AWAREEmbedder):
             scheduler.step(loss)
             with torch.no_grad():
                 coeffs.data = torch.clamp(coeffs.data, lower_bounds, upper_bounds)
+            loss_trace.append(loss.item())
             if loss.item() < best_loss:
                 best_loss = loss.item()
                 best_coeffs = coeffs.clone().detach()
             if self.verbose and (iteration % 200 == 0 or iteration == self.num_iterations - 1):
                 ber = torch.mean((torch.sign(predicted_pattern) != torch.sign(watermark_pattern)).float())
                 logger.debug(f"Iter {iteration+1:3d}: loss={loss.item():.6f} BER={ber.item():.4f}")
+        self._record_stats(best_coeffs.detach(), initial_coeffs, stft_magnitude, stft_phase,
+                           mask, not_freq_indices, watermark_pattern,
+                           lower_bounds, upper_bounds, best_loss, loss_trace)
+
         if self.verbose:
             logger.info(f"Optimization done in {time.time()-start_time:.1f}s, final loss {best_loss:.6f}")
         return best_coeffs.detach().cpu()
+
+    # ---- read-only diagnostics: never touches the returned coefficients ---- #
+    def _record_stats(self, best_coeffs, initial_coeffs, stft_magnitude, stft_phase,
+                      mask, not_freq_indices, watermark_pattern,
+                      lower_bounds, upper_bounds, best_loss, loss_trace):
+        """Populate self.last_stats to answer: did the optimizer run out of
+        perceptual BUDGET (every coeff pinned to its clamp bound, bits still
+        wrong), run out of ITERATIONS (loss still falling at the end), or
+        succeed at embed time (bits correct here => any later failure is a
+        READOUT problem, not an embedding one)?"""
+        with torch.no_grad():
+            bc = best_coeffs.to(self.device)
+            init = to_tensor(initial_coeffs).to(self.device)
+
+            # what the detector sees for the coefficients we actually write
+            wm_magnitude = stft_magnitude.clone()
+            wm_magnitude[mask] = bc
+            wm_magnitude = self._recompute_watermarked_magnitude(wm_magnitude, stft_phase)
+            wm_magnitude[not_freq_indices] = 0.0
+            predicted = self.detection_net(wm_magnitude.unsqueeze(0)).squeeze()
+            target_sign = torch.sign(watermark_pattern)
+
+            # saturation: a coeff pinned to its box bound had no room left.
+            # cells whose magnitude is 0 have a zero-width box (delta = 0) and
+            # are trivially "saturated" -- exclude them so the number means something.
+            width = upper_bounds - lower_bounds
+            active = width > 0
+            n_active = int(active.sum())
+            pinned = ((bc <= lower_bounds + 1e-4 * width) |
+                      (bc >= upper_bounds - 1e-4 * width)) & active
+
+            n = len(loss_trace)
+            quarters = [loss_trace[min(n - 1, max(0, int(n * f) - 1))]
+                        for f in (0.25, 0.5, 0.75, 1.0)] if n else [float("nan")] * 4
+            late_drop = ((quarters[1] - quarters[3]) / abs(quarters[1])
+                         if n and abs(quarters[1]) > 1e-12 else float("nan"))
+
+            self.last_stats = {
+                "n_vars": int(bc.numel()),          # writable cells: should scale ~1/N
+                "n_active": n_active,
+                "sat_frac": float(pinned.sum()) / n_active if n_active else float("nan"),
+                "embed_ber": float(torch.mean((torch.sign(predicted) != target_sign).float())),
+                "margin": float(torch.mean(predicted * target_sign)),
+                "delta_energy": float(torch.sum((bc - init) ** 2)),
+                "final_loss": float(best_loss),
+                "loss_q25": float(quarters[0]), "loss_q50": float(quarters[1]),
+                "loss_q75": float(quarters[2]), "loss_q100": float(quarters[3]),
+                "late_drop": float(late_drop),     # ~0 => plateaued; >0 => still improving
+            }
