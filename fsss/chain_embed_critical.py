@@ -415,6 +415,7 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
             "decimation_snr_db": dec_db,
             "budget_gap_db": budget_db,
             "host_len": self._host_len,
+            "slot_dof": self.plan.slot_dof(n),
             "strip_dof": self.plan.dof(n),
             "n_frames_host": 1 + self._host_len // self.hop_length,
         }
@@ -426,7 +427,9 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
             print(f"decimation round trip {dec_db:8.1f} dB   (want > 40; else widen guard_hz)")
             print(f"budget gap            {budget_db:8.1f} dB   (host is this much quieter)")
             print(f"host samples          {s['host_len']:8d}      "
-                  f"(strip dof {s['strip_dof']:.0f} -- critical means these agree)")
+                  f"(slot dof {s['slot_dof']:.0f} -- equal => critically sampled)")
+            print(f"passband dof          {s['strip_dof']:8.0f}      "
+                  f"(shortfall vs slot is guard band, not overcompleteness)")
             print(f"host frames           {s['n_frames_host']:8d}      "
                   f"(stock would be {1 + n // self.hop_length}; "
                   f"the BRH averages over these)")

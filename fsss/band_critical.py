@@ -160,12 +160,23 @@ class CriticalPlan:
         """Samples AWARE sees. ceil(n/M), matching x[..., ::M]."""
         return -(-int(n) // self.M)
 
-    def dof(self, n):
-        """Degrees of freedom in the strip: 2 * bandwidth * duration.
+    def slot_dof(self, n):
+        """Degrees of freedom in the SLOT: 2 * W * duration.
 
-        Printed next to host_length by the smoke test. For a critical plan the
-        two are equal up to the guard band -- that equality IS exp1's claim, and
-        is what band_steer's host does not satisfy.
+        This is the number host_length(n) should equal exactly -- that equality
+        IS the criticality claim, and is what band_steer's host does not satisfy
+        (74667 samples for 64000 dof on its own example).
+        """
+        return 2.0 * self.W * (n / self.sr)
+
+    def dof(self, n):
+        """Degrees of freedom actually CARRYING CONTENT: 2 * passband * duration.
+
+        Smaller than slot_dof by exactly the guard band, which is spent to stop
+        aliasing rather than lost to overcompleteness. Do not conflate the two:
+        the host is critically sampled for the slot, and separately some of the
+        slot is deliberately left empty. At W=800, guard=100 that is 600/800, so
+        25% of the host's directions are guard.
         """
         return 2.0 * (self.f_hi - self.f_lo) * (n / self.sr)
 
@@ -250,7 +261,11 @@ if __name__ == "__main__":
     taps = taps_for(plan)
     print(plan)
     print(f"  {n} samples -> host {plan.host_length(n)}   "
-          f"(strip dof {plan.dof(n):.0f} -- critical means these two agree)\n")
+          f"slot dof {plan.slot_dof(n):.0f}   "
+          f"{'EQUAL => critically sampled' if plan.host_length(n) == int(plan.slot_dof(n)) else 'MISMATCH'}")
+    print(f"  passband dof {plan.dof(n):.0f}  -- the remaining "
+          f"{100.0 * (1.0 - plan.dof(n) / plan.slot_dof(n)):.0f}% is guard band, "
+          f"deliberately empty, NOT overcompleteness\n")
 
     rng = np.random.default_rng(0)
     x_np = rng.standard_normal(n) * 0.05

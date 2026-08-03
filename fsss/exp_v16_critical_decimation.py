@@ -207,6 +207,7 @@ def build_configs(base, detector, args):
         try:
             e = CriticalBandAWAREEmbedder.from_embedder(
                 base, band_index=strip, num_bands=nbands, sampling_rate=WORK_SR,
+                guard_hz=args["guard"] or None, numtaps=args["numtaps"] or None,
                 tolerance_db=tol, salient=salient,
                 anchor=args["anchor"], anchor_rate=args["anchor_rate"],
                 region_ms=args["region_ms"])
@@ -249,6 +250,11 @@ def main(argv):
         "nbands": get_arg(argv, "--nbands", 10, int),
         "tol": get_arg(argv, "--tol", 6.0, float),
         "hop": get_arg(argv, "--hop", 0, int),
+        # Raise these if verify() reports a low decimation_snr_db on real speech:
+        # more taps sharpen the filter, more guard keeps its roll-off inside the
+        # slot. Both cost usable bandwidth or compute, neither costs correctness.
+        "numtaps": get_arg(argv, "--numtaps", 0, int),
+        "guard": get_arg(argv, "--guard", 0.0, float),
         "anchor": get_arg(argv, "--anchor", "librosa_flux", str),
         "anchor_rate": get_arg(argv, "--anchor-rate", 1.2, float),
         "region_ms": get_arg(argv, "--region-ms", 250.0, float),
