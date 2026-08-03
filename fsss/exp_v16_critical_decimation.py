@@ -75,10 +75,22 @@ Each swept across its full VOX_GRID strengths. A missing dependency SKIPs.
 The clean table is printed BEFORE the attack sweep starts, so a broken chain
 shows up in the log within minutes instead of after the full grid.
 
+READ THE TABLES ACROSS TOLERANCES, NOT DOWN ONE
+-----------------------------------------------
+Robustness tracks loudness. At a single --tol the arms are NOT comparable:
+measured at tol 6 on 3 Emilia clips, mean PESQ was stock 4.23, exp1b 3.23,
+exp1a 2.32. exp1a beat stock on six attack families there, but it was ~1.9 PESQ
+louder, so that says almost nothing about criticality.
+
+Hence --tols. The run prints a PESQ ladder at the end; find cells with similar
+PESQ in DIFFERENT rows and compare those. Comparing down a column at fixed tol
+measures which config happens to be louder. exp_v12's header makes the same
+point about the staircase.
+
 Run on a GPU node in wmcompare:
     conda activate wmcompare
-    python -m fsss.exp_v16_critical_decimation --clean-only        # ~minutes
-    python -m fsss.exp_v16_critical_decimation                      # clean + attacks
+    python -m fsss.exp_v16_critical_decimation --clean-only --tols 6,9,12
+    python -m fsss.exp_v16_critical_decimation --tols 6,9,12        # + attacks
     python -m fsss.exp_v16_critical_decimation --with-exp2 --nclips 5
     python -m fsss.exp_v16_critical_decimation --strip 4 --anchor-rate 0.8
 """
@@ -190,15 +202,19 @@ class Config:
         return detect_watermark(self.prep(audio), sr, detector)
 
 
-def build_configs(base, detector, args):
-    """Construct every config. Anything that cannot be built is reported and
-    skipped rather than taking the whole run down."""
-    strip, nbands, tol = args["strip"], args["nbands"], args["tol"]
+def build_configs(base, detector, args, tol):
+    """Construct every config at tolerance `tol`. Anything that cannot be built
+    is reported and skipped rather than taking the whole run down."""
+    strip, nbands = args["strip"], args["nbands"]
     nyq = WORK_SR / 2.0
     stock_band = tuple(getattr(base, "embedding_bands", (1000, 4000)))
     cfgs = []
 
     # ---- stock ---------------------------------------------------------- #
+    # `base` is shared and reused across tolerances, so set it here rather than
+    # once at load(): the exp1 arms take a copy of base.__dict__ inside
+    # from_embedder and then override tolerance_db themselves.
+    base.tolerance_db = float(tol)
     cfgs.append(Config("stock", base, stock_band, lambda a: a,
                        note=f"as shipped, band {stock_band}"))
 
@@ -248,7 +264,10 @@ def main(argv):
         "nclips": get_arg(argv, "--nclips", 3, int),
         "strip": get_arg(argv, "--strip", 2, int),
         "nbands": get_arg(argv, "--nbands", 10, int),
-        "tol": get_arg(argv, "--tol", 6.0, float),
+        # Sweeping tolerance is not optional for a fair comparison: robustness
+        # tracks loudness, so configs must be compared at MATCHED PESQ rather
+        # than matched tol. 6 is AWARE's shipped default; lower is louder.
+        "tols": get_list(argv, "--tols", [6.0], float),
         "hop": get_arg(argv, "--hop", 0, int),
         # Raise these if verify() reports a low decimation_snr_db on real speech:
         # more taps sharpen the filter, more guard keeps its roll-off inside the
@@ -290,7 +309,7 @@ def main(argv):
     print(f"strip        : {args['strip']}/{args['nbands']} = "
           f"{args['strip']*W:.0f}-{(args['strip']+1)*W:.0f} Hz "
           f"({'even/upright' if args['strip'] % 2 == 0 else 'ODD/reversed'})")
-    print(f"tolerance    : {args['tol']}  (lower = louder/stronger)")
+    print(f"tolerances   : {args['tols']}  (lower = louder/stronger)")
     print(f"salient      : {args['anchor']} @ {args['anchor_rate']}/s, "
           f"{args['region_ms']:.0f} ms regions (exp1b only)")
     print(f"attacks      : {'(clean only)' if args['clean_only'] else args['attacks']}")
@@ -310,30 +329,12 @@ def main(argv):
     print()
 
     embedder, detector = load()
-    print("configs:")
-    cfgs = build_configs(embedder, detector, args)
     if args["iters"]:
-        # Applied to every config including stock, so the comparison stays fair
-        # even at a reduced budget.
-        for c in cfgs:
-            c.embedder.num_iterations = int(args["iters"])
         print(f"  (num_iterations overridden to {args['iters']} for ALL configs)")
-    for c in cfgs:
-        print(f"  {c.name:8s} {c.note}")
-    print()
 
-    # ---- verify the chain BEFORE spending time on a full run -------------- #
-    # A convention mismatch produces a silently wrong watermark, not an
-    # exception, so this is not optional.
-    for c in cfgs:
-        if hasattr(c.embedder, "verify"):
-            print(f"--- verify {c.name} " + "-" * (58 - len(c.name)))
-            try:
-                c.embedder.verify(audios[0], WORK_SR)
-            except Exception as exc:
-                print(f"  verify FAILED: {type(exc).__name__}: {exc}")
-                traceback.print_exc()
-            print()
+    # Configs are rebuilt per tolerance inside the sweep below, because
+    # tolerance_db is fixed at construction. verify() runs once, on the first
+    # tolerance only -- it measures the chain, which does not depend on tol.
 
     # ---- run --------------------------------------------------------------- #
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -344,10 +345,13 @@ def main(argv):
                      "bit_acc", "conf", "detected", "pesq",
                      "coverage", "cells", "cells_full"])
 
-    agg = {}                      # (config, attack) -> [(bit_acc, detected), ...]
+    # keyed by (tol, config, attack) so each tolerance gets its own table, the
+    # way exp_v9 does it
+    agg = {}
+    pesq_agg = {}                 # (tol, config) -> [pesq, ...]
 
-    def record(cfg, attack, acc, conf):
-        agg.setdefault((cfg, attack), []).append((acc, int(conf >= DET_CONF)))
+    def record(tol, cfg, attack, acc, conf):
+        agg.setdefault((tol, cfg, attack), []).append((acc, int(conf >= DET_CONF)))
 
     pesq_metric = None
     if not args["no_pesq"]:
@@ -357,98 +361,131 @@ def main(argv):
         except Exception as exc:
             print(f"PESQ unavailable ({exc}); continuing without it\n")
 
-    wm_cache = {}                 # (clip_index, config) -> watermarked audio
+    all_names = []
 
-    # ---- phase 1: clean ---------------------------------------------------- #
-    print("=" * 78)
-    print("PHASE 1 -- clean (no attacks)")
-    print("=" * 78)
-    for ci, (clip, audio) in enumerate(zip(clips, audios)):
-        print(f"clip {ci+1}/{len(audios)}: {os.path.basename(clip)}")
+    for tol in args["tols"]:
+        print("\n" + "=" * 78)
+        print(f"TOLERANCE {tol}   (lower = louder/stronger)")
+        print("=" * 78)
+        cfgs = build_configs(embedder, detector, args, tol)
+        if args["iters"]:
+            for c in cfgs:
+                c.embedder.num_iterations = int(args["iters"])
         for c in cfgs:
-            try:
-                wm = c.embed(audio, WORK_SR, bits)
-            except Exception as exc:
-                print(f"  {c.name:8s} EMBED FAILED: {type(exc).__name__}: {exc}")
-                continue
-            wm_cache[(ci, c.name)] = wm
+            if c.name not in all_names:
+                all_names.append(c.name)
+            print(f"  {c.name:8s} {c.note}")
 
-            pat, conf = c.detect(wm, WORK_SR, detector)
-            acc = bit_acc(bits, pat)
-            record(c.name, "clean", acc, conf)
-
-            pq = float("nan")
-            if pesq_metric is not None:
-                try:
-                    pq = float(pesq_metric(wm, audio, WORK_SR))
-                except Exception:
-                    pass                                  # too little speech content
-
-            st = getattr(c.embedder, "last_mask_stats", None) or {}
-            writer.writerow([ci, c.name, args["strip"], args["tol"], "clean", "",
-                             round(acc, 4), round(float(conf), 4),
-                             int(conf >= DET_CONF), round(pq, 4),
-                             round(st.get("coverage", float("nan")), 4),
-                             st.get("cells", ""), st.get("cells_full_stripe", "")])
-            print(f"  {c.name:8s} bit_acc {acc:.3f}  conf {float(conf):.3f}  "
-                  f"pesq {pq:.2f}" +
-                  (f"  coverage {st['coverage']*100:.0f}%" if "coverage" in st else ""))
-    fout.flush()
-
-    print_table(agg, cfgs, ["clean"], "CLEAN")
-
-    if args["clean_only"]:
-        fout.close()
-        print(f"\nwrote {csv_path}")
-        print("read: clean bit_acc should be ~1.0 for every config. If exp1a is "
-              "below stock here, the chain is wrong -- check verify()'s "
-              "chain_null and decimation_snr before reading anything into the "
-              "attack numbers.")
-        return
-
-    # ---- phase 2: attacks --------------------------------------------------- #
-    print("=" * 78)
-    print("PHASE 2 -- attacks")
-    print("=" * 78)
-    for ci, clip in enumerate(clips):
-        print(f"clip {ci+1}/{len(clips)}: {os.path.basename(clip)}")
-        for c in cfgs:
-            wm = wm_cache.get((ci, c.name))
-            if wm is None:
-                continue
-            for attack in args["attacks"]:
-                for label, param in vox_attacks.VOX_GRID.get(attack, []):
+        # verify() only depends on the chain, not on tolerance, so run it once.
+        if tol == args["tols"][0]:
+            for c in cfgs:
+                if hasattr(c.embedder, "verify"):
+                    print(f"\n--- verify {c.name} " + "-" * (56 - len(c.name)))
                     try:
-                        wa = vox_attacks.apply(attack, param,
-                                               wm.astype("float32"), WORK_SR)
+                        c.embedder.verify(audios[0], WORK_SR)
+                    except Exception as exc:
+                        print(f"  verify FAILED: {type(exc).__name__}: {exc}")
+                        traceback.print_exc()
+
+        wm_cache = {}             # (clip_index, config) -> watermarked audio
+
+        # ---- phase 1: clean ------------------------------------------------ #
+        print(f"\n--- PHASE 1 clean, tol {tol} ---")
+        for ci, (clip, audio) in enumerate(zip(clips, audios)):
+            print(f"clip {ci+1}/{len(audios)}: {os.path.basename(clip)}")
+            for c in cfgs:
+                try:
+                    wm = c.embed(audio, WORK_SR, bits)
+                except Exception as exc:
+                    print(f"  {c.name:8s} EMBED FAILED: {type(exc).__name__}: {exc}")
+                    continue
+                wm_cache[(ci, c.name)] = wm
+
+                pat, conf = c.detect(wm, WORK_SR, detector)
+                acc = bit_acc(bits, pat)
+                record(tol, c.name, "clean", acc, conf)
+
+                pq = float("nan")
+                if pesq_metric is not None:
+                    try:
+                        pq = float(pesq_metric(wm, audio, WORK_SR))
+                        pesq_agg.setdefault((tol, c.name), []).append(pq)
                     except Exception:
-                        continue                          # missing dep -> SKIP
-                    if wa is None:
-                        continue
-                    pat, conf = c.detect(wa, WORK_SR, detector)
-                    acc = bit_acc(bits, pat)
-                    record(c.name, attack, acc, conf)
-                    writer.writerow([ci, c.name, args["strip"], args["tol"],
-                                     attack, label, round(acc, 4),
-                                     round(float(conf), 4), int(conf >= DET_CONF),
-                                     "", "", "", ""])
-            fout.flush()
-            print(f"  {c.name:8s} done")
+                        pass                              # too little speech content
+
+                st = getattr(c.embedder, "last_mask_stats", None) or {}
+                writer.writerow([ci, c.name, args["strip"], tol, "clean", "",
+                                 round(acc, 4), round(float(conf), 4),
+                                 int(conf >= DET_CONF), round(pq, 4),
+                                 round(st.get("coverage", float("nan")), 4),
+                                 st.get("cells", ""), st.get("cells_full_stripe", "")])
+                print(f"  {c.name:8s} bit_acc {acc:.3f}  conf {float(conf):.3f}  "
+                      f"pesq {pq:.2f}" +
+                      (f"  coverage {st['coverage']*100:.0f}%" if "coverage" in st else ""))
+        fout.flush()
+        print_table(agg, tol, [c.name for c in cfgs], ["clean"], f"CLEAN, tol {tol}")
+
+        if args["clean_only"]:
+            continue
+
+        # ---- phase 2: attacks ---------------------------------------------- #
+        print(f"\n--- PHASE 2 attacks, tol {tol} ---")
+        for ci, clip in enumerate(clips):
+            print(f"clip {ci+1}/{len(clips)}: {os.path.basename(clip)}")
+            for c in cfgs:
+                wm = wm_cache.get((ci, c.name))
+                if wm is None:
+                    continue
+                for attack in args["attacks"]:
+                    for label, param in vox_attacks.VOX_GRID.get(attack, []):
+                        try:
+                            wa = vox_attacks.apply(attack, param,
+                                                   wm.astype("float32"), WORK_SR)
+                        except Exception:
+                            continue                      # missing dep -> SKIP
+                        if wa is None:
+                            continue
+                        pat, conf = c.detect(wa, WORK_SR, detector)
+                        acc = bit_acc(bits, pat)
+                        record(tol, c.name, attack, acc, conf)
+                        writer.writerow([ci, c.name, args["strip"], tol,
+                                         attack, label, round(acc, 4),
+                                         round(float(conf), 4),
+                                         int(conf >= DET_CONF), "", "", "", ""])
+                fout.flush()
+                print(f"  {c.name:8s} done")
+        print_table(agg, tol, [c.name for c in cfgs],
+                    ["clean"] + args["attacks"], f"CLEAN + ATTACKS, tol {tol}")
+
     fout.close()
 
-    print_table(agg, cfgs, ["clean"] + args["attacks"], "CLEAN + ATTACKS")
+    # ---- the PESQ ladder: the whole reason for sweeping ------------------- #
+    # Robustness tracks loudness, so a config that is 2 PESQ louder will look
+    # more robust for reasons that have nothing to do with its design. Read the
+    # attack tables ACROSS tolerances at equal PESQ, not down a single table.
+    print("\n" + "#" * 66)
+    print("###  PESQ LADDER -- use this to pick comparable cells")
+    print("#" * 66)
+    print(f"  {'tol':>6s}" + "".join(f"{n:>14s}" for n in all_names))
+    for tol in args["tols"]:
+        line = f"  {tol:>6.1f}"
+        for n in all_names:
+            v = pesq_agg.get((tol, n), [])
+            line += (f"{np.mean(v):>14.2f}" if v else "-".rjust(14))
+        print(line)
+    print("#" * 66)
+    print("  Compare cells with SIMILAR PESQ across rows. Comparing down a")
+    print("  column at fixed tol measures loudness, not design.")
+
     print(f"\nwrote {csv_path}")
     print("read:")
-    print("  exp1a vs exp2a -- the sampling question. If they tie, criticality "
-          "buys speed but not strength, and band_steer's 'excess dies on the way "
-          "back' was already being handled by the perceptual clamp.")
-    print("  exp1a vs exp1b -- the gating question. Only fair at matched PESQ; "
-          "at fixed --tol the two arms are audibly different, so sweep --tol and "
-          "compare across runs at equal PESQ.")
-    print("  time_stretch / time_jitter -- the attacks that shift the decimation "
-          "PHASE. Constant phase rotation is invisible to a magnitude "
-          "spectrogram, so exp1 should mostly survive; if it does not, the "
-          "phase sensitivity is real and worth its own experiment.")
+    print("  exp1a vs stock at MATCHED PESQ -- the real question. exp1a wins on "
+          "robustness at fixed tol, but only because it is far louder there; "
+          "find the tol where their PESQ agrees and re-read.")
+    print("  exp1a vs exp1b -- the gating question, same rule: match PESQ first.")
+    print("  time_stretch / time_jitter -- shift the decimation PHASE. A constant "
+          "phase rotation is invisible to a magnitude spectrogram, so exp1 should "
+          "track stock rather than collapse.")
     print("  highpass / lowpass -- with everything in one strip these are "
           f"all-or-nothing. A notch inside {args['strip']*W:.0f}-"
           f"{(args['strip']+1)*W:.0f} Hz removes the entire watermark, where "
@@ -458,8 +495,7 @@ def main(argv):
           "averages over frames.")
 
 
-def print_table(agg, cfgs, rows, title):
-    names = [c.name for c in cfgs]
+def print_table(agg, tol, names, rows, title):
     Wc = 15
     width = 22 + Wc * len(names)
     print("\n" + "#" * width)
@@ -469,7 +505,7 @@ def print_table(agg, cfgs, rows, title):
     for attack in rows:
         line = f"  {attack:20s}"
         for n in names:
-            r = agg.get((n, attack), [])
+            r = agg.get((tol, n, attack), [])
             if not r:
                 line += "-".rjust(Wc)
                 continue

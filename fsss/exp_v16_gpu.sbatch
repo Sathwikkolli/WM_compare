@@ -61,12 +61,16 @@ python -m fsss.exp_v16_critical_decimation --clean-only --numtaps 4095
 echo "=== step 3: figures F1-F5 ==="
 python -m fsss.viz_critical --figs 1,2,3,4,5
 
-# 4) clean + METAPXYL proxy + key vox attacks.
-#    CAVEAT ON READING THIS: exp1a and exp1b sat 0.7 PESQ apart at matched
-#    tolerance, so a robustness gap between them is partly "exp1a is louder".
-#    The honest comparison needs a tolerance sweep and a match at equal PESQ.
-echo "=== step 4: exp_v16 clean + attacks ==="
-python -m fsss.exp_v16_critical_decimation --numtaps 4095
+# 4) clean + METAPXYL proxy + key vox attacks, ACROSS TOLERANCES.
+#    The tol-6 run gave mean PESQ stock 4.23 / exp1b 3.23 / exp1a 2.32, and
+#    exp1a beat stock on six attack families -- while being ~1.9 PESQ louder.
+#    That comparison is worthless as stated, because robustness tracks loudness.
+#    Sweeping QUIETER (higher tol) walks exp1a up the PESQ ladder until it meets
+#    stock, and only there does "does criticality help" have an answer.
+#    Cost is linear in the number of tolerances: 3 tols x 3 clips x 3 configs
+#    = 27 embeds. Trim to --tols 9,12 if the queue is tight.
+echo "=== step 4: exp_v16 clean + attacks, tolerance sweep ==="
+python -m fsss.exp_v16_critical_decimation --numtaps 4095 --tols 6,9,12
 
 # 5) robustness curves from step 4's CSV.
 echo "=== step 5: figure F6 ==="
