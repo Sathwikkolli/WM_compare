@@ -162,9 +162,17 @@ def wsr_db(wm, audio):
     higher than stock at the SAME tol, the PESQ gap is that scale mismatch and
     not a property of critical sampling -- fix the budget, do not sweep tol to
     paper over it.
+
+    Lengths are trimmed to the shorter of the two. AWARE's own round trip is
+    not length-preserving -- torch.istft with no explicit `length` returns
+    (n_frames-1)*hop, so stock comes back 32 samples short of its input at
+    n_fft=1024/hop=256 -- while the strip arms reconstruct to len(lo) exactly.
+    Do not assume either direction.
     """
     x = np.asarray(audio, dtype=float)
-    d = np.asarray(wm, dtype=float)[:len(x)] - x
+    y = np.asarray(wm, dtype=float)
+    n = min(len(x), len(y))
+    x, d = x[:n], y[:n] - x[:n]
     return 20.0 * np.log10((np.sqrt(np.mean(d ** 2)) + 1e-20)
                            / (np.sqrt(np.mean(x ** 2)) + 1e-20))
 
