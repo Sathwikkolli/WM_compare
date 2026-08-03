@@ -21,20 +21,27 @@ Does that help? Two readings, and the experiment is built to separate them:
   * it does not -- the perceptual clamp already pinned those directions, and all
                    criticality buys is speed
 
-CONFIGS (each = one row of every table)
----------------------------------------
-  stock   plain AWARE as shipped. No strip, no chain. The reference.
-  exp1a   critical strip, ALL cells writable.          <- band_critical
-  exp1b   critical strip, salient-gated (librosa_flux). <- band_critical + gating
-  exp2a   the SAME strip via band_steer's affine map.   <- overcomplete control
-          Opt-in (--with-exp2). May be impossible for a given strip: BandPlan
-          rejects a plan whose shifted band leaves (0, sr/2), which happens when
-          the native window is 500-4000 and the strip is narrow. Reported SKIP
-          with the reason rather than crashing the run.
+CONFIGS -- a 2x2 plus a reference (each = one column of every table)
+--------------------------------------------------------------------
+                        ALL cells            salient-gated
+  CRITICAL (exp1)       exp1a                exp1b        <- band_critical
+  OVERCOMPLETE (exp2)   exp2a                exp2b        <- band_steer
+  reference             stock = plain AWARE as shipped, no strip, no chain
 
-exp1a vs exp2a is the sampling question at matched strip.
-exp1a vs exp1b is the gating question at matched sampling.
-stock is there so both are readable against something familiar.
+  exp1a vs exp2a   the SAMPLING question at matched strip and matched gating
+  exp1a vs exp1b   the GATING question under critical sampling
+  exp2a vs exp2b   the same gating question under overcomplete sampling
+  stock            so all four are readable against something familiar
+
+Both salient arms build their masks with the SAME code
+(fsss/salient_mapped.py), differing only in the time scale their resampling
+implies -- 1/M for exp1, up/down for exp2. Anything else differing between them
+would be a confound rather than a result.
+
+exp2a/exp2b may be impossible for a given strip: BandPlan rejects a plan whose
+shifted band leaves (0, sr/2), which happens when the native window is 500-4000
+and the strip is narrow. Reported SKIP with the reason rather than crashing.
+Use --only to trim the config set when a run needs to be cheap.
 
 DETECTOR-BAND FIX (critical -- every earlier fsss experiment that missed this
 reported artificially weak numbers)
@@ -91,7 +98,7 @@ Run on a GPU node in wmcompare:
     conda activate wmcompare
     python -m fsss.exp_v16_critical_decimation --clean-only --tols 6,9,12
     python -m fsss.exp_v16_critical_decimation --tols 6,9,12        # + attacks
-    python -m fsss.exp_v16_critical_decimation --with-exp2 --nclips 5
+    python -m fsss.exp_v16_critical_decimation --only stock,exp1a,exp2a
     python -m fsss.exp_v16_critical_decimation --strip 4 --anchor-rate 0.8
 """
 
@@ -264,23 +271,43 @@ def build_configs(base, detector, args, tol):
         except Exception as exc:
             print(f"  SKIP {name}: {type(exc).__name__}: {exc}")
 
-    # ---- exp2a (opt-in overcomplete control) ----------------------------- #
-    if args["with_exp2"]:
+    # ---- exp2a / exp2b (the overcomplete arm) ---------------------------- #
+    # Same strip, carried by band_steer's affine map instead of decimation.
+    # exp1a vs exp2a is the sampling question; exp2a vs exp2b mirrors exp1a vs
+    # exp1b so the gating result can be checked under both representations.
+    W = WORK_SR / (2.0 * nbands)
+    target = (strip * W, (strip + 1) * W)
+    for name, salient in (("exp2a", False), ("exp2b", True)):
         try:
-            from fsss.chain_embed import BandSteerAWAREEmbedder
-            W = WORK_SR / (2.0 * nbands)
-            target = (strip * W, (strip + 1) * W)
-            e2 = BandSteerAWAREEmbedder.from_embedder(
-                base, key=b"unused", target_band=target,
-                sampling_rate=WORK_SR, tolerance_db=tol)
-            # band_steer maps the strip ONTO the native window on purpose, so the
-            # detector keeps its native band here -- unlike exp1.
-            cfgs.append(Config("exp2a", e2, tuple(e2.native_band),
+            if salient:
+                from fsss.chain_embed_salient import SalientBandSteerAWAREEmbedder
+                e2 = SalientBandSteerAWAREEmbedder.from_embedder(
+                    base, key=b"unused", target_band=target,
+                    sampling_rate=WORK_SR, tolerance_db=tol,
+                    anchor=args["anchor"], anchor_rate=args["anchor_rate"],
+                    region_ms=args["region_ms"])
+            else:
+                from fsss.chain_embed import BandSteerAWAREEmbedder
+                e2 = BandSteerAWAREEmbedder.from_embedder(
+                    base, key=b"unused", target_band=target,
+                    sampling_rate=WORK_SR, tolerance_db=tol)
+            if args["hop"]:
+                set_hop(e2, args["hop"])
+            # band_steer maps the strip ONTO the native window on purpose, so
+            # the detector keeps its NATIVE band here -- the opposite of exp1,
+            # which opens the band fully because decimation spreads the strip
+            # across the whole relabelled spectrum.
+            cfgs.append(Config(name, e2, tuple(e2.native_band),
                                e2.to_detector_input, note=repr(e2.plan)))
         except Exception as exc:
-            print(f"  SKIP exp2a: {type(exc).__name__}: {exc}")
-            print("       (BandPlan rejects a shifted band that leaves (0, sr/2); "
-                  "try --with-exp2 on a wider strip, or a smaller guard.)")
+            print(f"  SKIP {name}: {type(exc).__name__}: {exc}")
+            print("       (BandPlan rejects a shifted band that leaves "
+                  "(0, sr/2) -- happens for narrow strips when the native "
+                  "window is 500-4000. Try a wider strip or a smaller guard.)")
+
+    if args["only"]:
+        keep = set(args["only"])
+        cfgs = [c for c in cfgs if c.name in keep]
     return cfgs
 
 
@@ -311,7 +338,9 @@ def main(argv):
         "anchor": get_arg(argv, "--anchor", "librosa_flux", str),
         "anchor_rate": get_arg(argv, "--anchor-rate", 1.2, float),
         "region_ms": get_arg(argv, "--region-ms", 250.0, float),
-        "with_exp2": "--with-exp2" in argv,
+        # All five configs run by default now that exp2 has a salient arm.
+        # --only stock,exp1a trims the set when a run needs to be cheap.
+        "only": get_list(argv, "--only", [], str),
         "clean_only": "--clean-only" in argv,
         "no_pesq": "--no-pesq" in argv,
         "attacks": get_list(argv, "--attacks", DEFAULT_ATTACKS, str),

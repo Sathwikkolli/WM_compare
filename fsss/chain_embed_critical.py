@@ -100,21 +100,12 @@ import torch
 from fsss.band_critical import (CriticalPlan, t_analyze, t_from_model,
                                 t_split, t_synthesize, t_to_model, taps_for)
 from fsss.band_steer_torch import _fit
+from fsss.salient_mapped import (COVERAGE_WARN, DEFAULT_ANCHOR_RATE,
+                                 DEFAULT_REGION_MS, build_mapped_region_mask)
 from fsss.salient_region import normalize_rows
 from fsss.staircase import StaircaseAWAREEmbedder
 
-try:
-    from fsss.detectors import DETECTORS
-except ImportError:
-    from detectors import DETECTORS
-
-__all__ = ["CriticalBandAWAREEmbedder"]
-
-# See "Frame budget" above -- 3.5 (the salient_region default) saturates once
-# decimation has cut the frame count by M.
-DEFAULT_ANCHOR_RATE = 1.2
-DEFAULT_REGION_MS = 250.0          # in REAL time; scaled into host time internally
-COVERAGE_WARN = 0.85               # above this, gating is effectively a no-op
+__all__ = ["CriticalBandAWAREEmbedder"]               # above this, gating is effectively a no-op
 
 
 def _snr_db(ref, test, trim=0):
@@ -239,83 +230,45 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
                                                  n_freq, n_frames)
 
         rows = self._writable_rows(sampling_rate, n_freq)
-        M = np.zeros((n_freq, n_frames), dtype=bool)
 
         if self._orig_audio is None:                     # no original stashed
+            M = np.zeros((n_freq, n_frames), dtype=bool)
             M[rows, :] = True
             self.last_mask_stats = {"n_anchors": 0, "n_regions": 1,
                                     "coverage": 1.0, "cells": int(M.sum()),
                                     "cells_full_stripe": int(len(rows) * n_frames),
-                                    "fell_back": True}
+                                    "fell_back": True, "n_frames": int(n_frames)}
             return M
 
-        anchors = np.asarray(DETECTORS[self.anchor](self._orig_audio, self._orig_sr,
-                                                    target_rate=self.anchor_rate))
-        if anchors.size == 0:
-            # Degrade to stock rather than embedding nothing (salient_region does
-            # the same); `fell_back` makes it visible in the stats.
-            M[rows, :] = True
-            self.last_mask_stats = {"n_anchors": 0, "n_regions": 1,
-                                    "coverage": 1.0, "cells": int(M.sum()),
-                                    "cells_full_stripe": int(len(rows) * n_frames),
-                                    "fell_back": True}
-            return M
+        # Shared with exp2b (fsss/chain_embed_salient.py) ON PURPOSE. exp1b vs
+        # exp2b is meant to isolate the sampling strategy, so both arms must
+        # build their masks with identical arithmetic -- only the time scale
+        # differs. Decimation keeps every M-th sample and drops no time, so the
+        # original->host map here is 1/M; band_steer passes up/down instead.
+        M, stats = build_mapped_region_mask(
+            self._orig_audio, self._orig_sr,
+            1, self.plan.M,                              # <- the time scale, 1/10
+            n_freq, n_frames, self.hop_length, rows,
+            anchor=self.anchor, anchor_rate=self.anchor_rate,
+            region_ms=self.region_ms)
+        self.last_mask_stats = stats
 
-        # Original sample index -> host sample index is a plain divide by M,
-        # because decimation keeps every M-th sample and drops no time.
-        Mfac = self.plan.M
-        half = max(1, int(round(self.region_ms * self._orig_sr / 1000.0
-                                / Mfac / self.hop_length / 2)))
-        spans = []
-        for a in anchors:
-            centre = (int(a) // Mfac) // self.hop_length
-            s, e = max(0, centre - half), min(n_frames, centre + half)
-            if e > s:
-                spans.append((s, e))
-        if not spans:
-            M[rows, :] = True
-            self.last_mask_stats = {"n_anchors": int(anchors.size), "n_regions": 1,
-                                    "coverage": 1.0, "cells": int(M.sum()),
-                                    "cells_full_stripe": int(len(rows) * n_frames),
-                                    "fell_back": True}
-            return M
-
-        spans.sort()
-        merged = [list(spans[0])]                        # union overlapping regions
-        for s, e in spans[1:]:
-            if s <= merged[-1][1]:
-                merged[-1][1] = max(merged[-1][1], e)
-            else:
-                merged.append([s, e])
-
-        for s, e in merged:
-            M[rows[:, None], np.arange(s, e)[None, :]] = True
-
-        covered = int(sum(e - s for s, e in merged))
-        self.last_mask_stats = {
-            "n_anchors": int(anchors.size),
-            "n_regions": len(merged),
-            "frames_covered": covered,
-            "n_frames": int(n_frames),
-            "coverage": covered / float(n_frames) if n_frames else 0.0,
-            "cells": int(M.sum()),
-            "cells_full_stripe": int(len(rows) * n_frames),
-            "fell_back": False,
-        }
         if self.verbose:
             from aware.utils.logger import logger
-            st = self.last_mask_stats
-            logger.info(f"critical/salient: {st['n_anchors']} anchors -> "
-                        f"{st['n_regions']} regions, coverage "
-                        f"{st['coverage']*100:.1f}% of {n_frames} frames, "
-                        f"{st['cells']} writable cells "
-                        f"(full stripe would be {st['cells_full_stripe']})")
-            if st["coverage"] > COVERAGE_WARN:
+            if stats["fell_back"]:
+                logger.warning("critical/salient: no anchors -- writing the "
+                               "FULL stripe (equivalent to exp1a)")
+            logger.info(f"critical/salient: {stats['n_anchors']} anchors -> "
+                        f"{stats['n_regions']} regions, coverage "
+                        f"{stats['coverage']*100:.1f}% of {n_frames} frames, "
+                        f"{stats['cells']} writable cells "
+                        f"(full stripe would be {stats['cells_full_stripe']})")
+            if stats["coverage"] > COVERAGE_WARN:
                 logger.warning(
-                    f"critical/salient: coverage {st['coverage']*100:.0f}% > "
+                    f"critical/salient: coverage {stats['coverage']*100:.0f}% > "
                     f"{COVERAGE_WARN*100:.0f}% -- gating is effectively a NO-OP. "
                     f"Only {n_frames} host frames exist after decimating by "
-                    f"{Mfac}; lower --anchor-rate or --region-ms.")
+                    f"{self.plan.M}; lower --anchor-rate or --region-ms.")
         return M
 
     def _writable_rows(self, sampling_rate, n_freq):

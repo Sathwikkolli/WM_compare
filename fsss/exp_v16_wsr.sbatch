@@ -29,7 +29,7 @@
 # spending another job on the 27-embed tolerance sweep -- sweeping tol to make
 # the PESQ numbers line up would be hand-compensating for a scale error.
 #
-# --with-exp2 is included on purpose. exp2a routes through the SAME
+# exp2a/exp2b now run by default. exp2a routes through the SAME
 # normalise-host-then-add-raw-lo path in chain_embed.py, so if the mismatch is
 # real it should show there too -- which would confirm it is inherited from the
 # band_steer chain and not something critical decimation introduced. If exp2a
@@ -59,7 +59,6 @@ python -c "import torch; print('cuda', torch.cuda.is_available())"
 
 python -m fsss.exp_v16_critical_decimation \
     --clean-only \
-    --numtaps 4095 \
-    --with-exp2
+    --numtaps 4095
 
 echo "done $(date)"

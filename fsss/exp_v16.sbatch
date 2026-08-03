@@ -14,7 +14,8 @@
 # Cost shape: AWARE embeds by running a 400-iteration optimization PER FILE, so
 # wall clock is dominated by (clips x configs) embeds, not by the attack grid.
 # At 3 clips x 3 configs that is 9 embeds; the vox sweep afterwards is cheap by
-# comparison because it only re-detects. Add --with-exp2 and it becomes 12.
+# comparison because it only re-detects. All five configs run by default, so
+# that is 3 clips x 5 = 15 embeds; --only trims the set.
 #
 # Steps 1-2 are the gate. They cost seconds and minutes respectively, and if
 # either is wrong every number in step 4 is meaningless -- a bad chain produces
