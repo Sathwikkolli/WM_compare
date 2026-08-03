@@ -296,6 +296,19 @@ def main(argv):
     print(f"attacks      : {'(clean only)' if args['clean_only'] else args['attacks']}")
     print()
 
+    # Record what actually ran. AWAREEmbedder picks its device at __init__
+    # ("cuda" if available), so a GPU job that silently fell back to CPU looks
+    # identical in the results and only shows up as wall clock.
+    try:
+        import torch
+        if torch.cuda.is_available():
+            print(f"device       : cuda -- {torch.cuda.get_device_name(0)}")
+        else:
+            print("device       : CPU  (torch.cuda.is_available() is False)")
+    except Exception as exc:
+        print(f"device       : unknown ({exc})")
+    print()
+
     embedder, detector = load()
     print("configs:")
     cfgs = build_configs(embedder, detector, args)

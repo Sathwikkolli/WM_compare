@@ -109,12 +109,21 @@ _H2_CACHE = {}
 
 
 def _h2(taps, L):
-    """|H(f)|^2 for these taps at transform length L, cached."""
+    """|H(f)|^2 for these taps at transform length L, cached.
+
+    The cache VALUE holds a reference to `taps` on purpose. The key uses id(),
+    and CPython reuses addresses after garbage collection -- without that
+    reference a freed tap array could be replaced by a different one at the same
+    address and silently return the wrong filter. Pinning the taps (a few kB)
+    makes the id stable for as long as the entry lives.
+    """
     key = (id(taps), L, str(taps.device), str(taps.dtype))
-    if key not in _H2_CACHE:
+    hit = _H2_CACHE.get(key)
+    if hit is None:
         H = torch.fft.rfft(taps, L)
-        _H2_CACHE[key] = H.real ** 2 + H.imag ** 2
-    return _H2_CACHE[key]
+        hit = (taps, H.real ** 2 + H.imag ** 2)      # keep taps alive: see above
+        _H2_CACHE[key] = hit
+    return hit[1]
 
 
 def t_bandpass(x, taps):

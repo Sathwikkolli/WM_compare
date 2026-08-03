@@ -168,6 +168,8 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
 
         obj._taps_cache = {}
         obj._lo = None                 # the untouched remainder, x - strip
+        obj._lo_dev = None             # _lo on the compute device (see _lo_on)
+        obj._lo_dev_key = None
         obj._host_len = None
         obj._orig_audio = None         # anchors are computed on THIS, not the host
         obj._orig_sr = int(sampling_rate)
@@ -181,6 +183,32 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
         if k not in self._taps_cache:
             self._taps_cache[k] = taps_for(self.plan, device=device, dtype=dtype)
         return self._taps_cache[k]
+
+    def _set_lo(self, lo):
+        """Store the untouched remainder and drop any cached device copy.
+
+        Always go through this rather than assigning self._lo directly -- a
+        stale _lo_dev would silently watermark the PREVIOUS clip's remainder
+        into this clip, which produces plausible-looking audio and a watermark
+        that does not detect.
+        """
+        self._lo = lo
+        self._lo_dev = None
+        self._lo_dev_key = None
+
+    def _lo_on(self, device, dtype):
+        """`lo` on the compute device, cached across iterations.
+
+        The optimizer runs 400 iterations per file and `lo` is constant for all
+        of them. Without this cache _through_chain paid a host-to-device copy
+        AND a float64->float32 cast on every one, which is invisible on CPU
+        (same memory, cast only) and dominant on GPU.
+        """
+        k = (str(device), str(dtype))
+        if self._lo_dev is None or self._lo_dev_key != k:
+            self._lo_dev = self._lo.to(device, dtype)
+            self._lo_dev_key = k
+        return self._lo_dev
 
     def _window(self, device, dtype):
         return torch.hann_window(self.frame_length, device=device, dtype=dtype)
@@ -316,7 +344,7 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
         taps = self._taps(magnitude.device, magnitude.dtype)
 
         wav = self._istft(magnitude, phase, n_host)          # host back to time
-        lo = self._lo.to(wav.device, wav.dtype)
+        lo = self._lo_on(wav.device, wav.dtype)              # cached, see _lo_on
         y = lo + t_from_model(wav, self.plan, lo.shape[-1], taps)   # rebuild full audio
         _, host = t_analyze(y, self.plan, taps)              # detector re-extracts
         return self._stft_mag(_fit(host, n_host))
@@ -334,7 +362,8 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
         taps = self._taps(x.device, x.dtype)
 
         lo, host = t_analyze(x, self.plan, taps)
-        self._lo, self._host_len = lo, int(host.shape[-1])
+        self._set_lo(lo)                       # never assign _lo directly
+        self._host_len = int(host.shape[-1])
         self._orig_audio = np.asarray(audio, dtype=np.float32)   # anchors use this
         self._orig_sr = int(sample_rate)
 
@@ -382,7 +411,8 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
         x = torch.as_tensor(np.asarray(audio, dtype=np.float64))
         taps = self._taps(x.device, x.dtype)
         lo, host = t_analyze(x, self.plan, taps)
-        self._lo, self._host_len = lo, int(host.shape[-1])
+        self._set_lo(lo)                       # never assign _lo directly
+        self._host_len = int(host.shape[-1])
         self._orig_audio = np.asarray(audio, dtype=np.float32)
         self._orig_sr = int(sample_rate)
 
