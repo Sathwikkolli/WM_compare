@@ -147,6 +147,28 @@ def bit_acc(bits, pattern):
     return float(np.mean(b[:n] == p[:n])) if n else float("nan")
 
 
+def wsr_db(wm, audio):
+    """Watermark-to-signal ratio: 20*log10(rms(wm - x) / rms(x)), in dB.
+
+    THE number that decides whether tolerance_db means what it says. The clamp
+    lets each coefficient move to between 0.50x and 1.50x itself at tol 6, so a
+    watermark that respects it end to end should land somewhere well below 0 dB
+    -- stock typically lands far below.
+
+    It is reported per config because the clamp is applied to the HOST, and for
+    the strip configs the host is a peak-normalised band in isolation, ~18 dB
+    quieter than the mix (see verify()'s budget_gap_db, and chain_embed.py's
+    "No perceptual re-budgeting" note). If the strip arms show a WSR ~18 dB
+    higher than stock at the SAME tol, the PESQ gap is that scale mismatch and
+    not a property of critical sampling -- fix the budget, do not sweep tol to
+    paper over it.
+    """
+    x = np.asarray(audio, dtype=float)
+    d = np.asarray(wm, dtype=float)[:len(x)] - x
+    return 20.0 * np.log10((np.sqrt(np.mean(d ** 2)) + 1e-20)
+                           / (np.sqrt(np.mean(x ** 2)) + 1e-20))
+
+
 def set_hop(e, hop):
     """Change the STFT hop on an already-built embedder.
 
@@ -342,13 +364,14 @@ def main(argv):
     fout = open(csv_path, "w", newline="")
     writer = csv.writer(fout)
     writer.writerow(["clip", "config", "strip", "tol", "attack", "param",
-                     "bit_acc", "conf", "detected", "pesq",
+                     "bit_acc", "conf", "detected", "pesq", "wsr_db",
                      "coverage", "cells", "cells_full"])
 
     # keyed by (tol, config, attack) so each tolerance gets its own table, the
     # way exp_v9 does it
     agg = {}
     pesq_agg = {}                 # (tol, config) -> [pesq, ...]
+    wsr_agg = {}                  # (tol, config) -> [wsr_db, ...]
 
     def record(tol, cfg, attack, acc, conf):
         agg.setdefault((tol, cfg, attack), []).append((acc, int(conf >= DET_CONF)))
@@ -413,14 +436,18 @@ def main(argv):
                     except Exception:
                         pass                              # too little speech content
 
+                wsr = wsr_db(wm, audio)
+                wsr_agg.setdefault((tol, c.name), []).append(wsr)
+
                 st = getattr(c.embedder, "last_mask_stats", None) or {}
                 writer.writerow([ci, c.name, args["strip"], tol, "clean", "",
                                  round(acc, 4), round(float(conf), 4),
                                  int(conf >= DET_CONF), round(pq, 4),
+                                 round(wsr, 2),
                                  round(st.get("coverage", float("nan")), 4),
                                  st.get("cells", ""), st.get("cells_full_stripe", "")])
                 print(f"  {c.name:8s} bit_acc {acc:.3f}  conf {float(conf):.3f}  "
-                      f"pesq {pq:.2f}" +
+                      f"pesq {pq:.2f}  wsr {wsr:+6.1f}dB" +
                       (f"  coverage {st['coverage']*100:.0f}%" if "coverage" in st else ""))
         fout.flush()
         print_table(agg, tol, [c.name for c in cfgs], ["clean"], f"CLEAN, tol {tol}")
@@ -451,7 +478,8 @@ def main(argv):
                         writer.writerow([ci, c.name, args["strip"], tol,
                                          attack, label, round(acc, 4),
                                          round(float(conf), 4),
-                                         int(conf >= DET_CONF), "", "", "", ""])
+                                         int(conf >= DET_CONF),
+                                         "", "", "", "", ""])
                 fout.flush()
                 print(f"  {c.name:8s} done")
         print_table(agg, tol, [c.name for c in cfgs],
@@ -463,19 +491,30 @@ def main(argv):
     # Robustness tracks loudness, so a config that is 2 PESQ louder will look
     # more robust for reasons that have nothing to do with its design. Read the
     # attack tables ACROSS tolerances at equal PESQ, not down a single table.
-    print("\n" + "#" * 66)
-    print("###  PESQ LADDER -- use this to pick comparable cells")
-    print("#" * 66)
-    print(f"  {'tol':>6s}" + "".join(f"{n:>14s}" for n in all_names))
+    print("\n" + "#" * 72)
+    print("###  PESQ / WSR LADDER -- use this to pick comparable cells")
+    print("#" * 72)
+    print(f"  {'tol':>5s}" + "".join(f"{n + ' pesq/wsr':>21s}" for n in all_names))
     for tol in args["tols"]:
-        line = f"  {tol:>6.1f}"
+        line = f"  {tol:>5.1f}"
         for n in all_names:
-            v = pesq_agg.get((tol, n), [])
-            line += (f"{np.mean(v):>14.2f}" if v else "-".rjust(14))
+            p = pesq_agg.get((tol, n), [])
+            w = wsr_agg.get((tol, n), [])
+            cell = (f"{np.mean(p):.2f} / {np.mean(w):+.1f}dB"
+                    if p and w else "-")
+            line += cell.rjust(21)
         print(line)
-    print("#" * 66)
+    print("#" * 72)
     print("  Compare cells with SIMILAR PESQ across rows. Comparing down a")
     print("  column at fixed tol measures loudness, not design.")
+    print()
+    print("  FIRST look at WSR at the SAME tol. tolerance_db is applied to the")
+    print("  HOST, and for the strip arms the host is a peak-normalised band in")
+    print("  isolation -- verify() measured it 18 dB quieter than the mix. If the")
+    print("  strip arms sit ~18 dB above stock in WSR at equal tol, the PESQ gap")
+    print("  is THAT scale mismatch, not critical sampling, and the fix is to")
+    print("  re-budget the clamp against the original -- not to sweep tol until")
+    print("  the numbers happen to line up.")
 
     print(f"\nwrote {csv_path}")
     print("read:")
