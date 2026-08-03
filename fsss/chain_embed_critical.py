@@ -424,7 +424,14 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
             print(f"plan                  {self.plan}")
             print(f"stft roundtrip        {stft_db:8.1f} dB   (want > 40; else stft_center wrong)")
             print(f"chain null            {chain_db:8.1f} dB   (want > 30)")
-            print(f"decimation round trip {dec_db:8.1f} dB   (want > 40; else widen guard_hz)")
+            # MEASURED 2026-08: at numtaps=4095 this reads ~33 dB on Emilia
+            # speech and clean bit_acc is still 1.000 at 60/400 iterations, so
+            # ~30 dB is demonstrably sufficient. The old ">40" was copied from
+            # chain_embed's heuristic, not derived for this path -- do not chase
+            # it. What limits this number is |H|^2 (analysis) vs |H|^4 (analysis
+            # + synthesis) disagreeing inside the filter transitions; more taps
+            # narrow them, ~6 dB per 4x. Only worry if clean bit_acc drops.
+            print(f"decimation round trip {dec_db:8.1f} dB   (>30 ok; more taps = +6dB per 4x)")
             print(f"budget gap            {budget_db:8.1f} dB   (host is this much quieter)")
             print(f"host samples          {s['host_len']:8d}      "
                   f"(slot dof {s['slot_dof']:.0f} -- equal => critically sampled)")
