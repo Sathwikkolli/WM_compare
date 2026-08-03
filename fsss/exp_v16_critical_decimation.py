@@ -255,6 +255,10 @@ def main(argv):
         # slot. Both cost usable bandwidth or compute, neither costs correctness.
         "numtaps": get_arg(argv, "--numtaps", 0, int),
         "guard": get_arg(argv, "--guard", 0.0, float),
+        # AWARE embeds by optimizing per file, so this is the single biggest
+        # lever on wall clock. Drop it to shake out plumbing, restore it for
+        # any number you intend to report.
+        "iters": get_arg(argv, "--iters", 0, int),
         "anchor": get_arg(argv, "--anchor", "librosa_flux", str),
         "anchor_rate": get_arg(argv, "--anchor-rate", 1.2, float),
         "region_ms": get_arg(argv, "--region-ms", 250.0, float),
@@ -295,6 +299,12 @@ def main(argv):
     embedder, detector = load()
     print("configs:")
     cfgs = build_configs(embedder, detector, args)
+    if args["iters"]:
+        # Applied to every config including stock, so the comparison stays fair
+        # even at a reduced budget.
+        for c in cfgs:
+            c.embedder.num_iterations = int(args["iters"])
+        print(f"  (num_iterations overridden to {args['iters']} for ALL configs)")
     for c in cfgs:
         print(f"  {c.name:8s} {c.note}")
     print()

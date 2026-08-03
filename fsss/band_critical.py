@@ -75,15 +75,67 @@ Standalone smoke test (no AWARE / no GPU needed):
 
 import numpy as np
 import torch
+from scipy.fft import next_fast_len
 from scipy.signal import firwin
 
-# Reused verbatim from the band_steer path so both experiments share one filter
-# implementation -- if t_bandpass were subtly different between them, exp1 vs
-# exp2 would be comparing filters rather than comparing sampling strategies.
-from fsss.band_steer_torch import _fit, t_bandpass, t_split
+from fsss.band_steer_torch import _fit
 
 __all__ = ["CriticalPlan", "taps_for", "t_to_model", "t_from_model",
            "t_analyze", "t_synthesize", "t_split", "t_bandpass"]
+
+
+# --------------------------------------------------------------------------- #
+#  filtering -- same math as band_steer_torch.t_bandpass, made loop-affordable
+# --------------------------------------------------------------------------- #
+#  band_steer_torch picks L = n + 2*numtaps and transforms the taps on every
+#  call. For a handful of analyses that is fine. Here _through_chain calls the
+#  bandpass TWICE PER ITERATION at full rate, 400 iterations per file, so both
+#  choices become the dominant cost:
+#
+#    * L = 160000 + 2046 = 162046 has large prime factors, so torch falls back
+#      to Bluestein's algorithm instead of a fast radix transform.
+#    * rfft(taps, L) is recomputed every call although the taps never change.
+#
+#  Rounding L up to an FFT-friendly length is EXACT, not an approximation. The
+#  autocorrelation of h has support [-(m-1), m-1], so x*|h|^2 has support
+#  [-(m-1), n+m-2]; any L >= n+m-1 keeps the wrapped negative-lag tail clear of
+#  [0, n-1], and y[..., :n] is then identical for every such L. Both the old and
+#  new lengths satisfy that, so this changes speed and nothing else.
+#
+#  band_steer_torch is left untouched on purpose: exp2a imports from there, and
+#  editing it would silently move results the earlier fsss experiments already
+#  published.
+_H2_CACHE = {}
+
+
+def _h2(taps, L):
+    """|H(f)|^2 for these taps at transform length L, cached."""
+    key = (id(taps), L, str(taps.device), str(taps.dtype))
+    if key not in _H2_CACHE:
+        H = torch.fft.rfft(taps, L)
+        _H2_CACHE[key] = H.real ** 2 + H.imag ** 2
+    return _H2_CACHE[key]
+
+
+def t_bandpass(x, taps):
+    """Zero-phase bandpass -- the torch analogue of filtfilt.
+
+    Multiplying by |H|^2 applies h followed by time-reversed h. The DFT of that
+    is the autocorrelation of h, symmetric about lag 0, so the convolution
+    carries NO net delay provided the transform is long enough that the
+    two-sided response cannot wrap around.
+    """
+    n = x.shape[-1]
+    L = int(next_fast_len(n + 2 * taps.shape[-1]))
+    y = torch.fft.irfft(torch.fft.rfft(x, L) * _h2(taps, L), L)
+    return y[..., :n]
+
+
+def t_split(x, taps):
+    """(lo, hi). `lo` is defined by subtraction, so lo + hi == x exactly however
+    the filter behaves -- reconstruction can never be blamed on the taps."""
+    hi = t_bandpass(x, taps)
+    return x - hi, hi
 
 SR = 16000
 NUM_BANDS = 10
