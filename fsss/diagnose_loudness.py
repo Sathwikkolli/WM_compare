@@ -214,8 +214,12 @@ def main(argv):
     if boost > 2.0:
         print("  >> AWARE returned the band at a DIFFERENT level than it was given.")
         print("     Its pipeline ends in WaveformNormalizer, so the output is")
-        print("     scaled to peak 1.0 whatever went in, while `lo` stayed at its")
-        print("     original scale. Adding them re-balances the mix.")
+        print("     scaled to peak 1.0 whatever went in.")
+        print()
+        print("     This is measured by calling the PARENT's embed directly, so it")
+        print("     shows the raw problem. chain_embed._restore_level now corrects")
+        print("     it before `lo` is added back -- check the band-relative number")
+        print("     in the verdict to confirm the correction actually landed.")
     else:
         print("  >> AWARE returned the band at essentially the level it was given,")
         print("     so the normalisation hypothesis is WRONG and the loudness gap")
