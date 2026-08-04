@@ -108,6 +108,30 @@ from fsss.staircase import StaircaseAWAREEmbedder
 __all__ = ["CriticalBandAWAREEmbedder"]               # above this, gating is effectively a no-op
 
 
+def _restore_level(signal, reference):
+    """Scale `signal` so its RMS matches `reference`'s.
+
+    Same fix, same reason, as chain_embed._restore_level -- imported from there
+    would be tidier, but keeping it local means exp1 and exp2 stay readable
+    independently, which is the whole point of the two files.
+
+    AWAREEmbedder's postprocess ends in WaveformNormalizer, so super().embed()
+    returns peak 1.0 regardless of the level it was handed, while `lo` stays at
+    original scale. Adding them re-balances the mix. Measured on one Emilia clip
+    at tolerance 4, exp2a's band ended up +6.34 dB loud relative to the rest --
+    above the 4.25 dB ceiling the perceptual clamp can possibly produce, so it
+    could not have been the watermark.
+
+    RMS rather than peak: the watermark changes the waveform's crest factor, so
+    one new peak sample would otherwise drag the whole scaling with it.
+    """
+    a = float(np.sqrt(np.mean(np.asarray(reference, dtype=np.float64) ** 2)))
+    b = float(np.sqrt(np.mean(np.asarray(signal, dtype=np.float64) ** 2)))
+    if b <= 0.0 or a <= 0.0:
+        return signal
+    return signal * (a / b)
+
+
 def _snr_db(ref, test, trim=0):
     ref = np.asarray(ref, dtype=float).ravel()
     test = np.asarray(test, dtype=float).ravel()
@@ -162,6 +186,9 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
         obj._lo_dev = None             # _lo on the compute device (see _lo_on)
         obj._lo_dev_key = None
         obj._host_len = None
+        # Converts the normalised-host units the optimiser works in back to the
+        # raw host's units, so `lo` can be added to them. Set in embed().
+        obj._host_scale = 1.0
         obj._orig_audio = None         # anchors are computed on THIS, not the host
         obj._orig_sr = int(sampling_rate)
         obj.last_mask_stats = None
@@ -296,7 +323,13 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
         n_host = self._host_len or magnitude.shape[-1] * self.hop_length
         taps = self._taps(magnitude.device, magnitude.dtype)
 
-        wav = self._istft(magnitude, phase, n_host)          # host back to time
+        # AWARE's preprocess divided the host by its own peak, so `magnitude`
+        # -- and therefore this waveform -- lives in normalised units. `lo` is
+        # in raw units. Multiply back before adding them, or the optimiser
+        # spends 400 steps compensating for a mix that is several dB out.
+        # A FIXED constant on purpose: making it depend on the current waveform
+        # would let the rescaling shrink whatever the optimiser just added.
+        wav = self._istft(magnitude, phase, n_host) * self._host_scale
         lo = self._lo_on(wav.device, wav.dtype)              # cached, see _lo_on
         y = lo + t_from_model(wav, self.plan, lo.shape[-1], taps)   # rebuild full audio
         _, host = t_analyze(y, self.plan, taps)              # detector re-extracts
@@ -320,7 +353,14 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
         self._orig_audio = np.asarray(audio, dtype=np.float32)   # anchors use this
         self._orig_sr = int(sample_rate)
 
-        host_wm = super().embed(host.numpy().astype(audio.dtype), sample_rate, watermark)
+        host_np = host.numpy().astype(audio.dtype)
+        # The peak AWARE's preprocess will divide by; _through_chain multiplies
+        # it back so the optimiser sees a correctly balanced mix every iteration.
+        self._host_scale = float(np.max(np.abs(host_np))) or 1.0
+
+        host_wm = super().embed(host_np, sample_rate, watermark)
+        # super().embed() returns peak 1.0 whatever went in -- see _restore_level.
+        host_wm = _restore_level(host_wm, host_np)
 
         y = t_synthesize(lo, _fit(torch.as_tensor(np.asarray(host_wm, dtype=np.float64)),
                                   self._host_len), self.plan, taps)
@@ -366,6 +406,9 @@ class CriticalBandAWAREEmbedder(StaircaseAWAREEmbedder):
         lo, host = t_analyze(x, self.plan, taps)
         self._set_lo(lo)                       # never assign _lo directly
         self._host_len = int(host.shape[-1])
+        # _through_chain needs this, and verify() calls it -- without it the
+        # chain_null reading would be measured at the wrong level.
+        self._host_scale = float(np.max(np.abs(host.numpy()))) or 1.0
         self._orig_audio = np.asarray(audio, dtype=np.float32)
         self._orig_sr = int(sample_rate)
 

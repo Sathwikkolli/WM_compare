@@ -74,6 +74,39 @@ def native_window(base, sampling_rate):
     return float(freqs[rows.min()]), float(freqs[rows.max()])
 
 
+def _restore_level(signal, reference):
+    """Scale `signal` so its RMS matches `reference`'s.
+
+    WHY THIS IS NEEDED (measured 2026-08, fsss/diagnose_loudness.py)
+    ----------------------------------------------------------------
+    AWAREEmbedder's postprocess pipeline ends in WaveformNormalizer, so
+    super().embed() hands back a signal at peak 1.0 REGARDLESS of the level it
+    was given. `lo` -- the rest of the audio -- is still at its original scale,
+    so adding them re-balances the mix and the band comes back far too loud.
+
+    Measured on one Emilia clip at tolerance 4:
+
+        peak(host, raw)          0.333
+        peak(host, watermarked)  1.000        <- normalised, whatever went in
+        band energy vs the rest  +6.34 dB     <- how wrong the mix ended up
+
+    That +6.34 dB cannot be the watermark. AWARE's clamp is
+    upper = coeff * (1 + 10**(-tol/20)), so even with EVERY coefficient at its
+    ceiling the band could only gain 20*log10(1 + 10**(-4/20)) = 4.25 dB. Stock
+    AWARE over its own band measured -3.34 dB, comfortably inside. The excess is
+    the normalisation, not the mark.
+
+    RMS rather than peak, because the watermark legitimately changes the
+    waveform's crest factor -- one new peak sample would otherwise drag the
+    whole scaling with it. RMS also happens to be what PESQ responds to.
+    """
+    a = float(np.sqrt(np.mean(np.asarray(reference, dtype=np.float64) ** 2)))
+    b = float(np.sqrt(np.mean(np.asarray(signal, dtype=np.float64) ** 2)))
+    if b <= 0.0 or a <= 0.0:
+        return signal
+    return signal * (a / b)
+
+
 def _snr_db(ref, test, trim=0):
     ref, test = np.asarray(ref, dtype=float).ravel(), np.asarray(test, dtype=float).ravel()
     m = min(len(ref), len(test))
@@ -103,6 +136,9 @@ class BandSteerAWAREEmbedder(StaircaseAWAREEmbedder):
         obj._taps_cache = {}
         obj._lo = None
         obj._host_len = None
+        # Converts the normalised-host units the optimiser works in back to the
+        # raw host's units, so `lo` can be added to them. Set in embed().
+        obj._host_scale = 1.0
         obj.last_chain_stats = {}
         return obj
 
@@ -136,7 +172,13 @@ class BandSteerAWAREEmbedder(StaircaseAWAREEmbedder):
         round trip and compensates for it.
         """
         n_host = self._host_len or magnitude.shape[-1] * self.hop_length
-        wav = self._istft(magnitude, phase, n_host)
+        # AWARE's preprocess divided the host by its own peak, so `magnitude`
+        # -- and therefore this waveform -- lives in normalised units. `lo` is
+        # in raw units. Multiply back before adding them, or the optimiser
+        # spends 400 steps compensating for a mix that is several dB out.
+        # A FIXED constant on purpose: making it depend on the current waveform
+        # would let the rescaling shrink whatever the optimiser just added.
+        wav = self._istft(magnitude, phase, n_host) * self._host_scale
         lo = self._lo.to(wav.device, wav.dtype)
         y = lo + t_from_model(wav, self.plan, lo.shape[-1])          # rebuild full audio
         _, host = t_analyze(y, self.plan, self._taps(wav.device, wav.dtype))
@@ -155,7 +197,14 @@ class BandSteerAWAREEmbedder(StaircaseAWAREEmbedder):
         lo, host = t_analyze(x, self.plan, self._taps(x.device, x.dtype))
         self._lo, self._host_len = lo, int(host.shape[-1])
 
-        host_wm = super().embed(host.numpy().astype(audio.dtype), sample_rate, watermark)
+        host_np = host.numpy().astype(audio.dtype)
+        # The peak AWARE's preprocess will divide by; _through_chain multiplies
+        # it back so the optimiser sees a correctly balanced mix every iteration.
+        self._host_scale = float(np.max(np.abs(host_np))) or 1.0
+
+        host_wm = super().embed(host_np, sample_rate, watermark)
+        # super().embed() returns peak 1.0 whatever went in -- see _restore_level.
+        host_wm = _restore_level(host_wm, host_np)
 
         y = t_synthesize(lo, _fit(torch.as_tensor(np.asarray(host_wm, dtype=np.float64)),
                                   self._host_len), self.plan)
@@ -185,6 +234,9 @@ class BandSteerAWAREEmbedder(StaircaseAWAREEmbedder):
         x = torch.as_tensor(np.asarray(audio, dtype=np.float64))
         lo, host = t_analyze(x, self.plan, self._taps(x.device, x.dtype))
         self._lo, self._host_len = lo, int(host.shape[-1])
+        # _through_chain needs this, and verify() calls it -- without it the
+        # chain_null reading would be measured at the wrong level.
+        self._host_scale = float(np.max(np.abs(host.numpy()))) or 1.0
 
         from aware.utils.utils import to_tensor
         h = to_tensor(host.numpy().astype(np.asarray(audio).dtype)).to(self.device)

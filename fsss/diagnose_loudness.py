@@ -190,6 +190,7 @@ def main(argv):
     # returned host can be inspected before it is glued back on.
     embedder._lo = lo
     embedder._host_len = int(host_raw.shape[-1])
+    embedder._host_scale = float(np.max(np.abs(host_raw_np))) or 1.0
     if hasattr(embedder, "_lo_dev"):          # exp1 caches lo on the device
         embedder._lo_dev = None
     embedder._orig_audio = np.asarray(audio, dtype=np.float32)
@@ -231,30 +232,51 @@ def main(argv):
                                       f"{which}, over the strip:")
 
     # ---- 5. verdict -------------------------------------------------------- #
+    #
+    # Compare INSIDE minus OUTSIDE, not INSIDE alone. The whole file gets a
+    # global scale factor applied on the way out (aware/service/embed.py:49
+    # rescales by np.max(audio), the SIGNED max, where max(|audio|) was meant),
+    # and that factor lands on the band and on everything else equally. The
+    # outside number measures it in isolation, so subtracting removes it and
+    # leaves only what happened to the band itself.
+    #
+    # The ceiling is exact arithmetic, not a rule of thumb. AWARE's clamp is
+    #     upper = coeff + coeff * 10**(-tolerance_db/20)
+    # so even if EVERY coefficient were pushed to its ceiling, band energy could
+    # rise by at most 20*log10(1 + 10**(-tolerance_db/20)) dB. Anything above
+    # that cannot have come from watermarking.
+    relative = inside - outside
+    ceiling = 20.0 * np.log10(1.0 + 10.0 ** (-TOLERANCE_DB / 20.0))
+
     print("\n" + "=" * 74)
     print("VERDICT")
     print("=" * 74)
-    print(f"  The clamp allows each spectrogram value to move by at most")
-    print(f"  +/- {TOLERANCE_DB} dB, so a correctly scaled watermark cannot raise the")
-    print(f"  strip's total energy by much more than that.")
+    print(f"  band energy change      {inside:+7.2f} dB")
+    print(f"  everything else         {outside:+7.2f} dB   <- the global scale factor")
+    print(f"  band RELATIVE to rest   {relative:+7.2f} dB   <- what actually happened to the band")
     print()
-    print(f"  measured strip energy change : {inside:+.2f} dB")
-    if inside > TOLERANCE_DB + 3:
-        print(f"  -> FAR above the budget. The band was RESCALED, not just")
-        print(f"     watermarked. That is the cause of the PESQ gap, and the fix")
-        print(f"     is to restore the watermarked host to the raw host's level")
-        print(f"     before synthesis (chain_embed.py:160, chain_embed_critical")
-        print(f"     .py's embed) rather than to change tolerance_db.")
+    print(f"  ceiling at tolerance_db={TOLERANCE_DB}: {ceiling:+.2f} dB")
+    print(f"  (every coefficient at its upper bound -- the absolute maximum)")
+    print()
+    if abs(relative) > ceiling:
+        print(f"  -> {abs(relative):.2f} dB EXCEEDS the {ceiling:.2f} dB ceiling.")
+        print(f"     The band was RESCALED, not just watermarked. AWARE's pipeline")
+        print(f"     ends in WaveformNormalizer, so super().embed() returns peak 1.0")
+        print(f"     whatever went in, while `lo` stays at its original scale;")
+        print(f"     adding them re-balances the mix (chain_embed.py:160).")
+        print(f"     FIX: restore the watermarked host to the raw host's level")
+        print(f"     before synthesis. Do NOT compensate by changing tolerance_db.")
     else:
-        print(f"  -> within the budget. The band was NOT rescaled, so the PESQ gap")
-        print(f"     is not a scaling bug. Next suspect: the strip is only 800 Hz")
-        print(f"     wide, so the same 20 bits must be carried by ~4x fewer")
-        print(f"     coefficients than stock AWARE uses, forcing each one harder")
-        print(f"     against the clamp.")
+        print(f"  -> within the {ceiling:.2f} dB ceiling, so the band was NOT rescaled")
+        print(f"     and the loudness gap has another cause. Next suspect: the strip")
+        print(f"     is only 800 Hz wide, so the same 20 bits ride on ~4x fewer")
+        print(f"     coefficients than stock uses, forcing each one harder against")
+        print(f"     the clamp.")
     print()
-    print(f"  measured outside energy change : {outside:+.2f} dB")
-    print(f"  -> should be ~0. Compare against the stock control above: if BOTH")
-    print(f"     are non-zero, it is inherited from AWARE, not from the strip.")
+    print(f"  output peak {peak(strip_out):.4f} vs input {peak(audio):.4f}")
+    if peak(strip_out) > 1.0:
+        print(f"  -> over full scale. Harmless in memory, but this would clip if")
+        print(f"     written to integer PCM.")
 
 
 if __name__ == "__main__":
