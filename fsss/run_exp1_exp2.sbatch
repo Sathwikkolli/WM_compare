@@ -56,8 +56,17 @@ echo "###  EXPERIMENT 2 -- band-steered subband"
 echo "############################################################"
 python -m fsss.exp2_bandsteer
 
+# Both CSVs now exist, so build the combined view: one table with all five
+# configs. This only re-reads what the two runs already measured -- no GPU, no
+# re-embedding -- so it is instant and can be re-run any time.
+echo ""
+echo "############################################################"
+echo "###  COMBINED -- both experiments side by side"
+echo "############################################################"
+python -m fsss.compare_exp1_exp2
+
 echo ""
 echo "outputs in fsss_out/:"
-ls -la fsss_out/exp1_* fsss_out/exp2_* 2>/dev/null
+ls -la fsss_out/exp1_* fsss_out/exp2_* fsss_out/compare_* 2>/dev/null
 
 echo "done $(date)"

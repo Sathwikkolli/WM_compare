@@ -65,7 +65,7 @@ HOW TO RUN
     python -m fsss.exp2_bandsteer
 
 Everything adjustable is in the SETTINGS block below. Results are written to
-fsss_out/exp2_bandsteer.csv and four PNG figures.
+fsss_out/exp2_bandsteer.csv and five PNG figures.
 """
 
 import os
@@ -113,6 +113,11 @@ SEED = 0                    # fixes the random watermark, so runs are repeatable
 # 1600-2400 Hz -- the same strip experiment 1 uses, so the two are comparable.
 STRIP_INDEX = 2
 NUM_BANDS = 10
+
+# Derived: the strip's real frequency edges. 10 bands across 0-8000 Hz makes
+# each 800 Hz wide, so band 2 spans 1600-2400 Hz.
+STRIP_LOW = STRIP_INDEX * (WORK_SR / 2 / NUM_BANDS)
+STRIP_HIGH = (STRIP_INDEX + 1) * (WORK_SR / 2 / NUM_BANDS)
 
 # NOTE: unlike experiment 1, the filter length is not adjustable from here.
 # fsss/band_steer.py fixes it at 513 taps with a 150 Hz guard, and those values
@@ -162,6 +167,41 @@ def attack_grid(attack_name):
     return grid
 
 
+def band_snr(watermarked, original, sample_rate, low_hz, high_hz):
+    """How much of the audio changed INSIDE the intended band, and outside it.
+
+    Returns (snr_inside_dB, snr_outside_dB), each = 10*log10(original energy /
+    changed energy) in that frequency range. Higher means less was changed.
+
+    The outside number is the interesting one. A config that only touches its
+    own band should leave everything else bit-identical, giving a huge value
+    (60 dB or more). A small value means something is altering audio it was
+    never supposed to touch -- a global gain error will do this, and it shows up
+    in figure 1 as a faint copy of the whole original underneath the watermark.
+
+    Worth watching for stock AWARE too: aware/src/aware/service/embed.py
+    rescales the finished file by np.max(audio), the SIGNED maximum, while the
+    embedder normalised by max(|audio|). When a waveform's largest excursion is
+    negative -- common in speech -- those differ and the whole file comes back
+    slightly quiet.
+    """
+    n = min(len(watermarked), len(original))
+    x = np.asarray(original[:n], dtype=float)
+    difference = np.asarray(watermarked[:n], dtype=float) - x
+
+    spectrum_original = np.fft.rfft(x)
+    spectrum_difference = np.fft.rfft(difference)
+    frequencies = np.fft.rfftfreq(n, 1.0 / sample_rate)
+    inside = (frequencies >= low_hz) & (frequencies <= high_hz)
+
+    def ratio(mask):
+        signal = np.sum(np.abs(spectrum_original[mask]) ** 2)
+        changed = np.sum(np.abs(spectrum_difference[mask]) ** 2)
+        return 10.0 * np.log10(signal / max(changed, 1e-30))
+
+    return ratio(inside), ratio(~inside)
+
+
 class Config:
     """One column of the results tables.
 
@@ -170,14 +210,18 @@ class Config:
       detector_band  the frequency range the detector must look at (see below)
       to_detector    turns a finished audio file into whatever the detector
                      expects to be handed
+      expected_band  where this config is SUPPOSED to change the audio, used by
+                     band_snr to check that it did not change anything else
     """
 
-    def __init__(self, name, embedder, detector_band, to_detector, description):
+    def __init__(self, name, embedder, detector_band, to_detector, description,
+                 expected_band):
         self.name = name
         self.embedder = embedder
         self.detector_band = detector_band
         self.to_detector = to_detector
         self.description = description
+        self.expected_band = expected_band
 
     def embed(self, audio, sample_rate, bits):
         return embed_watermark(audio, sample_rate=sample_rate,
@@ -205,18 +249,16 @@ def build_configs(base_embedder):
         embedder=base_embedder,
         detector_band=native_band,          # its own native range
         to_detector=lambda audio: audio,    # detector reads the file directly
-        description=f"original AWARE, band {native_band[0]:.0f}-{native_band[1]:.0f} Hz"))
+        description=f"original AWARE, band {native_band[0]:.0f}-{native_band[1]:.0f} Hz",
+        expected_band=native_band))         # it should only change its own band
 
     # ---- exp2a and exp2b: the steered strip ---------------------------- #
-    strip_low = STRIP_INDEX * (WORK_SR / 2 / NUM_BANDS)
-    strip_high = (STRIP_INDEX + 1) * (WORK_SR / 2 / NUM_BANDS)
-
     for name, use_salient in (("exp2a", False), ("exp2b", True)):
         try:
             if use_salient:
                 embedder = SalientBandSteerAWAREEmbedder.from_embedder(
                     base_embedder,
-                    target_band=(strip_low, strip_high),
+                    target_band=(STRIP_LOW, STRIP_HIGH),
                     sampling_rate=WORK_SR,
                     tolerance_db=TOLERANCE_DB,
                     anchor=ANCHOR,
@@ -225,7 +267,7 @@ def build_configs(base_embedder):
             else:
                 embedder = BandSteerAWAREEmbedder.from_embedder(
                     base_embedder,
-                    target_band=(strip_low, strip_high),
+                    target_band=(STRIP_LOW, STRIP_HIGH),
                     sampling_rate=WORK_SR,
                     tolerance_db=TOLERANCE_DB)
         except Exception as error:
@@ -248,7 +290,8 @@ def build_configs(base_embedder):
             detector_band=tuple(embedder.native_band),
             to_detector=embedder.to_detector_input,   # cut + move, same as embedding
             description=("strip only" if not use_salient
-                         else f"strip + salient ({ANCHOR}, {ANCHOR_RATE}/s)")))
+                         else f"strip + salient ({ANCHOR}, {ANCHOR_RATE}/s)"),
+            expected_band=(STRIP_LOW, STRIP_HIGH)))   # only the strip should move
     return configs
 
 
@@ -290,11 +333,22 @@ def run_clean(configs, clips, audios, bits, detector, writer):
                 pesq_score = float("nan")
             snr_score = float(snr_metric(watermarked, audio))
 
-            results.setdefault((config.name, "clean"), []).append((ber, confidence))
-            q = quality.setdefault(config.name, {"pesq": [], "snr": []})
+            # Did it change only what it was supposed to change?
+            snr_in, snr_out = band_snr(watermarked, audio, WORK_SR,
+                                       config.expected_band[0],
+                                       config.expected_band[1])
+
+            # every result is stored as (BER, confidence, PESQ) so the clean row
+            # and the attack rows can share one table
+            results.setdefault((config.name, "clean"), []).append(
+                (ber, confidence, pesq_score))
+            q = quality.setdefault(config.name,
+                                   {"pesq": [], "snr": [], "in": [], "out": []})
             if not np.isnan(pesq_score):
                 q["pesq"].append(pesq_score)
             q["snr"].append(snr_score)
+            q["in"].append(snr_in)
+            q["out"].append(snr_out)
 
             # coverage only exists for the salient config
             stats = getattr(config.embedder, "last_mask_stats", None) or {}
@@ -304,6 +358,7 @@ def run_clean(configs, clips, audios, bits, detector, writer):
                              round(ber, 2), round(confidence, 4),
                              int(confidence >= DETECT_THRESHOLD),
                              round(pesq_score, 3), round(snr_score, 2),
+                             round(snr_in, 1), round(snr_out, 1),
                              round(coverage, 3) if coverage == coverage else ""])
 
             line = (f"  {config.name:6s}  BER {ber:6.2f}%   conf {confidence:5.3f}"
@@ -315,15 +370,22 @@ def run_clean(configs, clips, audios, bits, detector, writer):
     return results, quality, marked
 
 
-def run_attacks(configs, clips, marked, bits, detector, results, writer):
-    """Damage every watermarked file in every way, and try to read it back."""
-    ber_metric = BER()
+def run_attacks(configs, clips, audios, marked, bits, detector, results, writer):
+    """Damage every watermarked file in every way, and try to read it back.
+
+    PESQ is measured here too, against the ORIGINAL clean audio. So it scores
+    watermark damage AND attack damage together, which means the attack usually
+    dominates -- a heavy mp3 sounds bad whether or not it carries a watermark.
+    That is still useful, because every config gets the identical attack, so
+    comparing configs within one row isolates the watermark's share of it.
+    """
+    ber_metric, pesq_metric = BER(), PESQ()
 
     print("\n" + "=" * 74)
     print("STEP 2 -- attacks")
     print("=" * 74)
 
-    for clip_index, path in enumerate(clips):
+    for clip_index, (path, audio) in enumerate(zip(clips, audios)):
         print(f"\nclip {clip_index + 1}/{len(clips)}: {os.path.basename(path)}")
 
         for config in configs:
@@ -343,12 +405,21 @@ def run_attacks(configs, clips, marked, bits, detector, results, writer):
                     ber = float(ber_metric(recovered, bits))
                     confidence = float(confidence)
 
-                    results.setdefault((config.name, attack), []).append((ber, confidence))
+                    # PESQ refuses some badly mangled inputs; that is a fact
+                    # about the attack, so record it as missing and carry on.
+                    try:
+                        pesq_score = float(pesq_metric(damaged, audio, WORK_SR))
+                    except Exception:
+                        pesq_score = float("nan")
+
+                    results.setdefault((config.name, attack), []).append(
+                        (ber, confidence, pesq_score))
+                    # the last three columns are clean-audio-only measurements
                     writer.writerow([clip_index, config.name, TOLERANCE_DB,
                                      attack, label, round(ber, 2),
                                      round(confidence, 4),
                                      int(confidence >= DETECT_THRESHOLD),
-                                     "", "", ""])
+                                     round(pesq_score, 3), "", "", "", ""])
             print(f"  {config.name:6s}  done")
 
 
@@ -357,35 +428,49 @@ def run_attacks(configs, clips, marked, bits, detector, results, writer):
 # =========================================================================== #
 
 def average(results, config_name, attack):
-    """(mean BER, mean confidence, number detected, number tried)."""
+    """(mean BER, mean confidence, mean PESQ, number detected, number tried).
+
+    PESQ is averaged over the cases where it succeeded; if it failed everywhere
+    the mean is NaN and the table prints a dash.
+    """
     rows = results.get((config_name, attack), [])
     if not rows:
-        return float("nan"), float("nan"), 0, 0
+        return float("nan"), float("nan"), float("nan"), 0, 0
     bers = [r[0] for r in rows]
     confs = [r[1] for r in rows]
+    pesqs = [r[2] for r in rows if not np.isnan(r[2])]
     detected = sum(1 for r in rows if r[1] >= DETECT_THRESHOLD)
-    return float(np.mean(bers)), float(np.mean(confs)), detected, len(rows)
+    return (float(np.mean(bers)), float(np.mean(confs)),
+            float(np.mean(pesqs)) if pesqs else float("nan"),
+            detected, len(rows))
 
 
 def print_tables(results, configs, quality):
     names = [c.name for c in configs]
     rows = ["clean"] + ATTACKS
 
-    # ---- table 1: BER and confidence ----------------------------------- #
-    width = 22 + 16 * len(names)
+    # ---- table 1: BER, confidence and PESQ, per attack ------------------ #
+    width = 22 + 22 * len(names)
     print("\n" + "=" * width)
-    print("TABLE 1 -- bit error rate and detector confidence")
-    print("           BER is a percentage, lower is better (0 = perfect).")
-    print("           conf is 0 to 1, higher is better (>= 0.5 = detected).")
+    print("TABLE 1 -- bit error rate, detector confidence and audio quality")
+    print("           BER%  percent of bits wrong. Lower is better, 0 = perfect.")
+    print("           conf  detector confidence 0-1. Higher is better, >= 0.5 = detected.")
+    print("           PESQ  quality of the attacked file vs the clean original.")
+    print("                 Higher is better. The attack dominates this number, so")
+    print("                 compare configs ACROSS a row, not rows against each other.")
     print("=" * width)
-    print(f"  {'attack':20s}" + "".join(f"{n:>16s}" for n in names))
-    print(f"  {'':20s}" + "".join(f"{'BER%':>9s}{'conf':>7s}" for _ in names))
+    print(f"  {'attack':20s}" + "".join(f"{n:>22s}" for n in names))
+    print(f"  {'':20s}" + "".join(f"{'BER%':>7s}{'conf':>7s}{'PESQ':>8s}" for _ in names))
     print("  " + "-" * (width - 2))
     for attack in rows:
         line = f"  {attack:20s}"
         for name in names:
-            ber, conf, _, tried = average(results, name, attack)
-            line += "-".rjust(16) if tried == 0 else f"{ber:>9.2f}{conf:>7.3f}"
+            ber, conf, pesq, _, tried = average(results, name, attack)
+            if tried == 0:
+                line += "-".rjust(22)
+            else:
+                pesq_text = "   -" if np.isnan(pesq) else f"{pesq:8.2f}"
+                line += f"{ber:>7.2f}{conf:>7.3f}{pesq_text:>8s}"
         print(line)
     print("=" * width)
 
@@ -393,35 +478,45 @@ def print_tables(results, configs, quality):
     print("\n" + "=" * width)
     print("TABLE 2 -- detection rate (files where confidence >= 0.5)")
     print("=" * width)
-    print(f"  {'attack':20s}" + "".join(f"{n:>16s}" for n in names))
+    print(f"  {'attack':20s}" + "".join(f"{n:>22s}" for n in names))
     print("  " + "-" * (width - 2))
     for attack in rows:
         line = f"  {attack:20s}"
         for name in names:
-            _, _, detected, tried = average(results, name, attack)
-            line += "-".rjust(16) if tried == 0 else f"{f'{detected}/{tried}':>16s}"
+            _, _, _, detected, tried = average(results, name, attack)
+            line += "-".rjust(22) if tried == 0 else f"{f'{detected}/{tried}':>22s}"
         print(line)
     print("=" * width)
 
     # ---- table 3: what the watermark costs in audio quality ------------- #
-    print("\n" + "=" * 52)
+    print("\n" + "=" * 78)
     print("TABLE 3 -- audio quality on clean files")
-    print("           PESQ higher = better;  SNR higher = quieter watermark")
-    print("=" * 52)
-    print(f"  {'config':10s}{'PESQ':>12s}{'SNR (dB)':>14s}")
-    print("  " + "-" * 50)
+    print("=" * 78)
+    print(f"  {'config':10s}{'PESQ':>10s}{'SNR dB':>10s}"
+          f"{'in-band dB':>14s}{'out-band dB':>15s}")
+    print("  " + "-" * 76)
     for name in names:
-        q = quality.get(name, {"pesq": [], "snr": []})
-        pesq_mean = np.mean(q["pesq"]) if q["pesq"] else float("nan")
-        snr_mean = np.mean(q["snr"]) if q["snr"] else float("nan")
-        print(f"  {name:10s}{pesq_mean:>12.2f}{snr_mean:>14.2f}")
-    print("=" * 52)
-    print(f"\n  All three configs used tolerance_db = {TOLERANCE_DB} -- the same")
-    print("  perceptual budget -- so differences come from the method, not the")
-    print("  strength. Note that the budget is applied to whatever each config")
-    print("  hands AWARE, and for the strip configs that is a quieter, isolated")
-    print("  band, so the strip watermarks still end up louder in absolute terms.")
-    print("  The SNR column is the honest measure of that.")
+        q = quality.get(name, {"pesq": [], "snr": [], "in": [], "out": []})
+        mean = lambda key: np.mean(q[key]) if q.get(key) else float("nan")
+        print(f"  {name:10s}{mean('pesq'):>10.2f}{mean('snr'):>10.2f}"
+              f"{mean('in'):>14.1f}{mean('out'):>15.1f}")
+    print("=" * 78)
+    print("  PESQ        speech quality, higher is better")
+    print("  SNR         whole-file watermark loudness, higher = quieter mark")
+    print("  in-band     how much was changed inside the intended band")
+    print("              (lower = a stronger watermark went in there)")
+    print("  out-band    how much was changed OUTSIDE it. Should be very large")
+    print("              (60 dB+): a config that only touches its own band must")
+    print("              leave the rest of the audio bit-identical. A small")
+    print("              value means audio is being altered that never should")
+    print("              have been -- see figure 1, where it appears as a faint")
+    print("              copy of the whole original underneath the watermark.")
+    print(f"\n  All configs used tolerance_db = {TOLERANCE_DB} -- the same perceptual")
+    print("  budget -- so differences come from the method, not the strength.")
+    print("  But note that the budget is applied to whatever each config hands")
+    print("  AWARE, and for the strip configs that is a quieter, isolated band.")
+    print("  The strip watermarks therefore still end up louder in absolute")
+    print("  terms; the SNR column is the honest measure of that.")
 
 
 # =========================================================================== #
@@ -523,10 +618,10 @@ def figure_quality(quality, configs):
     ax2.set_ylabel("dB", fontsize=9)
     ax2.grid(axis="y", alpha=0.25)
 
-    fig.suptitle(f"{TAG.upper()} figure 4 -- cost on clean audio "
+    fig.suptitle(f"{TAG.upper()} figure 5 -- cost on clean audio "
                  f"(all configs at tolerance_db = {TOLERANCE_DB})", fontsize=11)
     fig.tight_layout()
-    save(fig, "f4_quality")
+    save(fig, "f5_quality")
 
 
 def save(fig, name):
@@ -596,11 +691,12 @@ def main():
         writer = csv.writer(handle)
         writer.writerow(["clip", "config", "tolerance_db", "attack", "strength",
                          "ber_percent", "confidence", "detected",
-                         "pesq", "snr_db", "coverage"])
+                         "pesq", "snr_db", "snr_in_band_db", "snr_out_band_db",
+                         "coverage"])
 
         results, quality, marked = run_clean(
             configs, clips, audios, bits, detector, writer)
-        run_attacks(configs, clips, marked, bits, detector, results, writer)
+        run_attacks(configs, clips, audios, marked, bits, detector, results, writer)
 
     # ---- report ---------------------------------------------------------- #
     print_tables(results, configs, quality)
@@ -616,6 +712,9 @@ def main():
                 "figure 3 -- detector confidence by attack", "confidence",
                 "f3_confidence", reference_line=DETECT_THRESHOLD,
                 invert_note="   (dashed line = detection threshold 0.5)")
+    figure_bars(results, configs, 2,
+                "figure 4 -- PESQ by attack", "PESQ",
+                "f4_pesq", invert_note="   (higher is better)")
     figure_quality(quality, configs)
 
     print(f"\nwrote {csv_path}")
