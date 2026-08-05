@@ -10,9 +10,14 @@ convention in `results/README.md`.
 ## Run it
 
 ```bash
-# once, on Great Lakes
-conda env create -f environment_align.yml
-conda activate alignbench
+# once, on Great Lakes -- installs into the existing wmcompare env
+conda activate wmcompare
+pip freeze > $HOME/wmcompare_freeze_before_align.txt   # rollback point
+pip install --dry-run -r requirements_extra.txt        # check what pip would change
+pip install -r requirements_extra.txt
+
+# confirm the watermark models still load
+python -c "from aware.utils.models import load; load(name='AWARE(20bps)'); print('aware ok')"
 
 # sanity check before burning cluster time
 python attacks_align.py        # prints the 20 attacks / 77 configs by family
@@ -38,6 +43,7 @@ Set `--account` in `align_bench.sbatch` first; it is still a placeholder.
 | `run_bench.py` | Slurm-array runner, one task per clip |
 | `score.py` | Metrics -> `summary.md`. **Metric meanings documented at the top.** |
 | `plots.py` | 5 figures |
+| `requirements_extra.txt` | the 2 extra packages + snapshot/rollback procedure |
 
 ## The three things that make this benchmark trustworthy
 

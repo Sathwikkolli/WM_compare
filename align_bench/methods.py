@@ -287,8 +287,10 @@ def calibrate(sr=16000, dur_s=8.0, shift_s=1.0, seed=0):
     = +shift_s*sr by our convention), and see what each method reports. If it
     comes back negative, that method's sign multiplier is -1.
 
-    Returns {method_name: +1.0 | -1.0 | nan}. nan = method never produced a
-    usable answer; treat as broken, not as +1.
+    Returns {method_name: {'sign': +1.0|-1.0|nan, 'ok': bool, 'note': str}}.
+    sign = nan means the method never produced a usable answer -- treat it as
+    broken, NOT as +1. The note distinguishes "not installed" from "installed
+    but wrong", which matters a lot when debugging.
     """
     rng = np.random.RandomState(seed)
     n = int(dur_s * sr)
@@ -307,19 +309,41 @@ def calibrate(sr=16000, dur_s=8.0, shift_s=1.0, seed=0):
     signs = {}
     for name in METHODS:
         out = run(name, ref, dist, sr, sign=1.0)
+        note = out.get("note", "")
         if not out["ok"] or not np.isfinite(out["offset"]):
-            signs[name] = float("nan")
+            missing = "unavailable" in note or "has no" in note
+            signs[name] = {
+                "sign": float("nan"),
+                "ok": False,
+                "note": ("NOT INSTALLED -- " if missing else "FAILED -- ") + note,
+            }
             continue
         got = out["offset"]
-        if abs(got - truth) <= abs(-got - truth):
-            signs[name] = 1.0
-        else:
-            signs[name] = -1.0
+        sign = 1.0 if abs(got - truth) <= abs(-got - truth) else -1.0
+        err_ms = abs(got * sign - truth) / sr * 1000.0
+        signs[name] = {
+            "sign": sign,
+            "ok": True,
+            "note": f"reported {got / sr:+.3f}s vs truth {truth / sr:+.3f}s, "
+                    f"residual {err_ms:.1f}ms",
+        }
     return signs
 
 
+def signs_only(cal):
+    """Flatten calibrate() output to {name: float} for run()."""
+    return {k: (v["sign"] if np.isfinite(v["sign"]) else 1.0) for k, v in cal.items()}
+
+
 if __name__ == "__main__":
-    print("calibrating sign conventions (synthetic 1.0 s head crop)...")
-    for k, v in calibrate().items():
-        state = "BROKEN / not installed" if not np.isfinite(v) else f"sign={v:+.0f}"
-        print(f"  {k:16s} {state}")
+    print("calibrating sign conventions (synthetic 1.0 s head crop)...\n")
+    cal = calibrate()
+    for k, v in cal.items():
+        state = f"sign={v['sign']:+.0f}" if v["ok"] else "UNUSABLE"
+        print(f"  {k:16s} {state:10s} {v['note']}")
+    missing = [k for k, v in cal.items() if not v["ok"] and "NOT INSTALLED" in v["note"]]
+    if missing:
+        print(f"\n{len(missing)} method(s) not installed: {', '.join(missing)}")
+        print("Install them into the wmcompare env:")
+        print("    pip install --dry-run -r requirements_extra.txt   # check first")
+        print("    pip install -r requirements_extra.txt")

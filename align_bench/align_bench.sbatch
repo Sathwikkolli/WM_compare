@@ -34,10 +34,10 @@ export TORCHDYNAMO_DISABLE=1
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 eval "$(conda shell.bash hook)"
-conda activate alignbench      # SEPARATE env -- see environment_align.yml.
-                               # Do NOT install audalign into `wmcompare`; it
-                               # pins its own numpy/scipy and can break the four
-                               # working watermark models.
+conda activate wmcompare       # same env as the watermark benchmarks.
+                               # audalign + audio-offset-finder are installed on
+                               # top of it -- see requirements_extra.txt for the
+                               # snapshot/rollback procedure.
 
 # module load ffmpeg           # uncomment if ffmpeg is not already on PATH
                                # (needed for mp3 / aac / opus -- 13 configs)

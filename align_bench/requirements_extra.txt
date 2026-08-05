@@ -1,0 +1,28 @@
+# Extra packages the alignment bake-off needs on top of the `wmcompare` env.
+# Everything else (numpy, scipy, librosa, torch, transformers, pydub, ffmpeg,
+# matplotlib) is already there.
+#
+# Decision: install into `wmcompare` directly rather than a separate env.
+#
+# BEFORE installing, snapshot the versions that matter so a bad resolve can be
+# undone:
+#     conda activate wmcompare
+#     pip freeze > $HOME/wmcompare_freeze_before_align.txt
+#     pip list | grep -Ei "numpy|scipy|librosa|torch|numba"
+#
+# See what pip WOULD change before letting it:
+#     pip install --dry-run -r requirements_extra.txt
+#
+# If it proposes touching numpy, scipy, numba or torch, stop and install with
+#     pip install --no-deps -r requirements_extra.txt
+# then add only the genuinely missing leaf deps by hand.
+#
+# AFTER installing, confirm nothing broke:
+#     python -c "from aware.utils.models import load; load(name='AWARE(20bps)'); print('aware ok')"
+#     python -c "import audioseal; print('audioseal ok')"
+#
+# Rollback if needed:
+#     pip install -r $HOME/wmcompare_freeze_before_align.txt
+
+audalign
+audio-offset-finder

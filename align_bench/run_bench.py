@@ -15,6 +15,7 @@ Usage:
     python run_bench.py --phase1              # 5 clips, all 6 methods (screen)
     python run_bench.py --methods gcc_phat,audalign_fp
     python run_bench.py --attacks crop_head,splice_cut
+    python run_bench.py --force               # run even if a method failed calibration
     # under Slurm, SLURM_ARRAY_TASK_ID selects the clip automatically
 """
 import csv
@@ -66,7 +67,7 @@ def git_commit():
         return "unknown"
 
 
-def write_params(signs, clips, methods_used, attacks_used):
+def write_params(calibration, clips, methods_used, attacks_used):
     """params.json -- everything needed to reproduce this run."""
     os.makedirs(RESULTS_DIR, exist_ok=True)
     import platform
@@ -89,7 +90,7 @@ def write_params(signs, clips, methods_used, attacks_used):
         "methods": methods_used,
         "attacks": attacks_used,
         "n_configs": AA.n_configs(),
-        "sign_calibration": signs,
+        "sign_calibration": calibration,
         "python": platform.python_version(),
         "packages": versions,
     }
@@ -185,16 +186,24 @@ def main(argv):
             print(f"foreign clip load failed ({e}); insert_foreign will SKIP")
 
     print("calibrating method sign conventions...")
-    signs = M.calibrate(sr=WORK_SR)
-    for k, v in signs.items():
-        print(f"  {k:16s} " + ("UNUSABLE" if not np.isfinite(v) else f"sign={v:+.0f}"))
-    bad = [k for k, v in signs.items() if k in methods_used and not np.isfinite(v)]
+    cal = M.calibrate(sr=WORK_SR)
+    for k, v in cal.items():
+        state = f"sign={v['sign']:+.0f}" if v["ok"] else "UNUSABLE"
+        print(f"  {k:16s} {state:10s} {v['note']}")
+    signs = M.signs_only(cal)
+
+    bad = [k for k in methods_used if not cal.get(k, {}).get("ok")]
     if bad:
-        print(f"WARNING: these methods failed calibration and are probably not "
-              f"installed / broken: {bad}")
+        print(f"\nWARNING: {bad} failed calibration. Their rows will be written "
+              f"as ok=0 and scored as misses -- which is honest, but if they are "
+              f"simply not installed you are burning cluster time for nothing.")
+        if "--force" not in argv:
+            raise SystemExit(
+                "Refusing to run. Install them (conda activate alignbench), drop "
+                "them with --methods, or pass --force to run anyway.")
 
     os.makedirs(DATA_DIR, exist_ok=True)
-    write_params(signs, clips, methods_used, attacks_used)
+    write_params(cal, clips, methods_used, attacks_used)
 
     for ci in indices:
         if ci >= len(all_clips):
