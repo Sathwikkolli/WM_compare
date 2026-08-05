@@ -158,19 +158,20 @@ def _audalign(ref, dist, sr, recognizer_name):
         with _quiet():
             rec = getattr(ad, ctor)()
             res = ad.align_files(fr, fd, recognizer=rec)
-        off_s, conf, segs = _dig_audalign(res, os.path.basename(fd))
+        off_s, conf, cands = _dig_audalign(
+            res, os.path.basename(fd), os.path.basename(fr), recognizer_name)
         ok = bool(np.isfinite(off_s))
         return {
             # raw sign as audalign reports it -- calibrate() derives the
             # multiplier, so do NOT second-guess it here.
             "offset": off_s * sr if ok else np.nan,
-            "segments": segs,
+            "segments": [],          # see README: segment F1 not implemented yet
+            "candidates": cands,     # (offset_s, score) local maxima
             "confidence": conf,
             "ok": ok,
-            "note": f"{ctor}" if ok else
-                    f"{ctor}: aligned, but no offset found in result dict "
-                    f"(keys={list(res.keys())[:6] if isinstance(res, dict) else type(res)}) "
-                    f"-- run probe_audalign.py and patch _dig_audalign",
+            "note": (f"{ctor} ncand={len(cands)}" if ok else
+                     f"{ctor}: aligned, but no offset in result dict "
+                     f"(keys={list(res.keys())[:6] if isinstance(res, dict) else type(res)})"),
         }
     except Exception as e:
         return _fail(f"{ctor} error: {e}")
@@ -186,41 +187,52 @@ def _audalign(ref, dist, sr, recognizer_name):
             pass
 
 
-def _dig_audalign(res, dist_name):
-    """audalign's return shape has moved between versions -- dig defensively.
+def _dig_audalign(res, dist_name, ref_name, kind):
+    """Pull the offset out of audalign's result.
 
-    We want: seconds the distorted file must move to line up, a confidence, and
-    (fingerprinting only) per-segment matches. Sign is fixed by calibrate().
+    Verified against audalign 1.3.1 with probe_audalign.py. The structure is:
+
+      res[<filename>]                     -> shift in SECONDS  <- the answer
+      res['match_info'][<dist>]['match_info'][<ref>]
+            ['offset_seconds']            -> list of candidate offsets
+            ['confidence']                -> parallel list of scores
+      res['names_and_paths']              -> filename -> path  (NOT offsets;
+                                             reading this first was the old bug)
+
+    Returns (offset_seconds, confidence_0_to_1, candidates).
+    Sign is left raw -- calibrate() owns it.
     """
-    off, conf, segs = np.nan, float("nan"), []
+    off, conf, cands = np.nan, float("nan"), []
     if not isinstance(res, dict):
-        return off, conf, segs
+        return off, conf, cands
 
-    shifts = res.get("names_and_paths") or res.get("match_info") or res
-    for key in (dist_name, os.path.splitext(dist_name)[0]):
-        if isinstance(shifts, dict) and key in shifts:
-            v = shifts[key]
-            if isinstance(v, (int, float)):
-                off = float(v)
-            elif isinstance(v, dict):
-                for k in ("offset_seconds", "offset", "time_offset"):
-                    if k in v:
-                        off = float(v[k])
-                        break
-                for k in ("confidence", "match_confidence"):
-                    if k in v:
-                        conf = float(v[k])
-                        break
-            break
+    # 1) top-level shift: this IS the aligned answer
+    v = res.get(dist_name)
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        off = float(v)
 
-    if not np.isfinite(off):
-        for k in ("offset_seconds", "offset", "time_offset"):
-            if k in res and isinstance(res[k], (int, float)):
-                off = float(res[k])
-                break
+    # 2) detail block: candidate offsets + their scores
+    try:
+        mi = res["match_info"][dist_name]["match_info"][ref_name]
+        offs = [float(x) for x in (mi.get("offset_seconds") or [])]
+        cfs = [float(x) for x in (mi.get("confidence") or [])]
+        cands = list(zip(offs, cfs))
+        if not np.isfinite(off) and offs:
+            off = offs[0]
+        if cfs:
+            conf = cfs[0]
+    except Exception:
+        pass
+
     if np.isfinite(conf):
-        conf = float(np.clip(conf / 100.0, 0.0, 1.0)) if conf > 1.0 else conf
-    return off, conf, segs
+        if kind == "fingerprint":
+            # raw count of matching hashes -- unbounded, so squash it.
+            # ~300 hashes reads as full confidence.
+            conf = float(np.clip(np.log10(1.0 + max(conf, 0.0)) / 2.5, 0.0, 1.0))
+        else:
+            # correlation recognizers already report a normalised score
+            conf = float(np.clip(conf, 0.0, 1.0))
+    return off, conf, cands
 
 
 def audalign_fp(ref, dist, sr, **_):
