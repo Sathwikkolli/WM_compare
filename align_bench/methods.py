@@ -27,6 +27,8 @@ Methods
   audalign_spec   audalign CorrelationSpectrogramRecognizer.
   dtw_subseq      librosa subsequence DTW -- the warping cases.
 """
+import contextlib
+import io
 import os
 import tempfile
 import time
@@ -35,6 +37,21 @@ import warnings
 import numpy as np
 
 warnings.filterwarnings("ignore")
+
+
+@contextlib.contextmanager
+def _quiet():
+    """audalign prints a paragraph plus a tqdm bar per call.
+
+    At 77 configs x 30 clips x 3 recognizers that is ~7k paragraphs, which makes
+    the Slurm log useless. Set ALIGNBENCH_VERBOSE=1 to see it while debugging.
+    """
+    if os.environ.get("ALIGNBENCH_VERBOSE"):
+        yield
+        return
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        yield
 
 
 # --------------------------------------------------------------------------- #
@@ -138,15 +155,22 @@ def _audalign(ref, dist, sr, recognizer_name):
     try:
         sf.write(fr, ref.astype("float32"), sr)
         sf.write(fd, dist.astype("float32"), sr)
-        rec = getattr(ad, ctor)()
-        res = ad.align_files(fr, fd, recognizer=rec)
+        with _quiet():
+            rec = getattr(ad, ctor)()
+            res = ad.align_files(fr, fd, recognizer=rec)
         off_s, conf, segs = _dig_audalign(res, os.path.basename(fd))
+        ok = bool(np.isfinite(off_s))
         return {
-            "offset": -off_s * sr if np.isfinite(off_s) else np.nan,
+            # raw sign as audalign reports it -- calibrate() derives the
+            # multiplier, so do NOT second-guess it here.
+            "offset": off_s * sr if ok else np.nan,
             "segments": segs,
             "confidence": conf,
-            "ok": bool(np.isfinite(off_s)),
-            "note": f"{ctor}",
+            "ok": ok,
+            "note": f"{ctor}" if ok else
+                    f"{ctor}: aligned, but no offset found in result dict "
+                    f"(keys={list(res.keys())[:6] if isinstance(res, dict) else type(res)}) "
+                    f"-- run probe_audalign.py and patch _dig_audalign",
         }
     except Exception as e:
         return _fail(f"{ctor} error: {e}")
