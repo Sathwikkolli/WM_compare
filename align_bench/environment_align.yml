@@ -1,0 +1,42 @@
+# Separate conda env for the alignment bake-off.
+#
+# This is NOT a preference -- it is forced by the dependency graph:
+#
+#     audio-offset-finder  requires  librosa >= 0.10.2
+#     aware                requires  librosa == 0.9.2
+#
+# They cannot coexist. Installing the aligners into `wmcompare` upgrades librosa
+# to 0.11.x and breaks AWARE's pin (also drags matplotlib, tqdm, and downgrades
+# setuptools 70 -> 59).
+#
+# It costs nothing to separate them: align_bench never imports aware, audioseal,
+# timbre or aura. It only needs librosa + the two aligners + numpy/scipy/mpl.
+#
+#   conda env create -f environment_align.yml
+#   conda activate alignbench
+#
+# vox_attacks.py needs torch/transformers (encodec), julius (filters), pydub
+# (dynamic range) and ffmpeg (mp3/aac/opus). Any missing one makes only its own
+# attacks SKIP -- it never blocks the run.
+
+name: alignbench
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10          # matches wmcompare, so cached wheels are reused
+  - numpy<2.0
+  - scipy
+  - matplotlib
+  - ffmpeg
+  - pip
+  - pip:
+      # the methods under test
+      - audalign
+      - audio-offset-finder
+      - librosa>=0.10.2   # required by audio-offset-finder
+      - soundfile
+      # needed by cascade/vox_attacks.py for the attack grid
+      - pydub
+      - julius
+      - torch
+      - transformers      # encodec attack
