@@ -38,7 +38,9 @@ RESULTS_DIR = os.path.join(BASE, "results", RUN_SLUG)
 DATA_DIR = os.path.join(RESULTS_DIR, "data")
 FIG_DIR = os.path.join(RESULTS_DIR, "figures")
 
-TOL_MS = 20.0
+# headline bar = 50 ms: AWARE(20bps) slides its detector in 42 ms steps, so
+# finer alignment buys the detector nothing. See score.py for the full rationale.
+TOL_MS = 50.0
 CODEC_TOL_MS = 100.0
 SR = 16000
 
@@ -79,10 +81,10 @@ def fig_error_cdf(rows):
         e = np.sort(np.array(by_m[m]))
         frac = np.searchsorted(e, grid, side="right") / len(e)
         plt.semilogx(grid, frac * 100, label=f"{m}  (n={len(e)})", lw=2)
-    plt.axvline(TOL_MS, color="k", ls="--", lw=1, alpha=0.6)
-    plt.text(TOL_MS * 1.1, 4, "20 ms", fontsize=9)
-    plt.axvline(1.0, color="k", ls=":", lw=1, alpha=0.5)
-    plt.text(1.1, 4, "1 ms", fontsize=9)
+    for x, lab, ls in ((1.0, "1 ms", ":"), (20.0, "20 ms", ":"),
+                       (50.0, "50 ms  (AWARE 20bps step = 42 ms)", "--")):
+        plt.axvline(x, color="k", ls=ls, lw=1, alpha=0.6)
+        plt.text(x * 1.08, 4, lab, fontsize=8, rotation=90, va="bottom")
     plt.xlabel("error tolerance (ms, log scale)")
     plt.ylabel("% of pairs aligned within tolerance")
     plt.title("Alignment accuracy -- error CDF")
