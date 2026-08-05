@@ -58,7 +58,13 @@ Codec / zero-shift stress: `opus` (6), `aac` (2), `encodec` (5),
 `inverse_polarity` is the trap: true offset 0, but flipping the sign makes a
 naive `argmax` of cross-correlation fail outright.
 
-**Clips (30)** — Emilia only. See open question below on length buckets.
+**Clips (30)** — Emilia only, natural durations, no concatenation.
+Manifest: 896,592 rows -> 435,788 after the 9 s filter -> 30 sampled (seed 0),
+plus 5 held-out clips as foreign audio for `insert_foreign`.
+
+Actual durations: **min 9.2 s, median 14.5 s, max 27.8 s**. Wider than the ~10 s
+we assumed, so there is some length variation to read a scaling trend from --
+but nothing over 60 s, so the 3-minute regime is still uncovered.
 
 **Run matrix**
 
@@ -97,13 +103,41 @@ fingerprinting is the only method scoring above zero on multi-segment.
 Time-stretch and jitter need DTW or fail everywhere. Expected outcome is a
 **two-method combination**, not a single winner.
 
-## Open questions blocking the run
+## Tolerances
 
-1. Length strategy — Emilia clips are ~10 s (`MIN_DUR = 9.0`), stated need is
-   5 s–3 min. Concatenate to build 5 s / 30 s / 120 s buckets, or accept 10 s only?
-2. Which Emilia CSV is live on the cluster?
-3. Slurm account string (sbatch still says `REPLACE_WITH_YOUR_ACCOUNT`)
-4. Confirm primary tolerance = 20 ms (matches `exp_a_repeatability.py` `W_MS`)
+Three, because one number would mislead:
+
+| Bar | Why |
+|---|---|
+| 1 ms | strict; only matters if something needs sample-grade sync |
+| 20 ms | matches `W_MS` in `fsss/exp_a_repeatability.py`, for comparability |
+| **50 ms** | **headline.** AWARE(20bps) slides its detector in `chunk_duration//24` = 42 ms steps, so finer alignment buys the detector nothing. Also the conventional bar in the music-sync literature. |
+
+This matters because `methods.calibrate()` measured audalign's fingerprint and
+spectrogram recognizers at a **22–25 ms resolution floor on clean audio**.
+Scoring only at 20 ms would mark them near-zero for being coarse rather than
+wrong.
+
+Measured residuals on a clean synthetic 1 s crop:
+
+| method | residual |
+|---|---|
+| `gcc_phat` | 0.0 ms |
+| `aof` | 0.0 ms |
+| `audalign_corr` | 0.0 ms |
+| `dtw_subseq` | 8.0 ms |
+| `audalign_spec` | 21.7 ms |
+| `audalign_fp` | 24.8 ms |
+
+## Setup resolved
+
+- Emilia manifest: `/nfs/turbo/umd-hafiz/issf_server_data/emilia/manifests/emilia_curated.csv`
+  (columns: `path, duration_s, speaker, language, dnsmos, dataset`)
+- Env: `wmcompare`, with `audalign` + `audio-offset-finder` installed on top.
+  This upgraded librosa 0.9.2 -> 0.11.0, breaking AWARE's pin; AWARE still loads
+  and runs, but that pin is now violated -- re-verify before trusting new
+  AWARE numbers.
+- Smoke test (clip 0, 3 attacks, 8 configs, 6 methods): 48 rows, 0 skipped, 12.2 s.
 
 ## Known coverage gap
 
