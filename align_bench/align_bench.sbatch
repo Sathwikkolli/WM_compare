@@ -44,14 +44,13 @@ conda activate wmcompare       # same env as the watermark benchmarks.
 
 cd "$WM_COMPARE_BASE/align_bench"
 
-# clips.json is shared by all tasks; task 0 builds it, the rest wait for it.
-if [ "$SLURM_ARRAY_TASK_ID" = "0" ]; then
-    python make_clips.py
-else
-    for i in $(seq 1 60); do
-        [ -f clips.json ] && break
-        sleep 10
-    done
+# clips.json must already exist -- build it on the login node BEFORE submitting:
+#     python make_clips.py
+# Doing it here would race 30 tasks against one file, and a bad EMILIA_CSV would
+# fail all 30 instead of failing once, interactively, in two seconds.
+if [ ! -f clips.json ]; then
+    echo "ERROR: clips.json missing. Run 'python make_clips.py' first." >&2
+    exit 1
 fi
 
 python run_bench.py
