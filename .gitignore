@@ -4,6 +4,11 @@ vox_out/*.wav
 __pycache__/
 *.pyc
 
+# results/ is the permanent experiment archive -- ALWAYS tracked.
+# Nothing under it may be ignored; see results/README.md.
+!results/
+!results/**
+
 # client production-pipeline audio (re-downloaded on the cluster from Dropbox)
 client_processed/
 client_stage_results.csv

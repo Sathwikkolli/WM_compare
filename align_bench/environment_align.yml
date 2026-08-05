@@ -1,0 +1,33 @@
+# Separate conda env for the alignment bake-off.
+#
+# DELIBERATELY NOT the `wmcompare` env. audalign pulls its own numpy/scipy pins
+# and installing it alongside AudioSeal / AWARE / Timbre / AURA risks breaking
+# four models that currently work. Two envs, zero risk.
+#
+#   conda env create -f environment_align.yml
+#   conda activate alignbench
+#
+# Python 3.11, not 3.14: audalign and audio-offset-finder are older packages and
+# do not yet work cleanly against numpy 2.x on 3.14.
+
+name: alignbench
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy<2.0
+  - scipy
+  - matplotlib
+  - ffmpeg
+  - pip
+  - pip:
+      # the methods under test
+      - audalign
+      - audio-offset-finder
+      - librosa
+      - soundfile
+      # needed by cascade/vox_attacks.py for the attack grid
+      - pydub
+      - julius
+      - torch
+      - transformers        # encodec attack
