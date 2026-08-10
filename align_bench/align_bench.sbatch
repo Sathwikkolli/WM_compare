@@ -5,10 +5,13 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16g
-#SBATCH --time=04:00:00
+#SBATCH --time=00:45:00
+# Measured 2026-08-05: 184.6 s for one 14 s clip, full 77-config grid, 6 methods.
+# 45 min is ~15x headroom for the longest (27.8 s) clip. Keep it tight -- short
+# jobs get scheduled far sooner than 4-hour ones.
 #SBATCH --array=0-29
 #SBATCH --output=alignbench_%A_%a.log
-#SBATCH --account=REPLACE_WITH_YOUR_ACCOUNT
+#SBATCH --account=hafiz1
 
 # --- Alignment method bake-off: 6 methods x 20 attacks x 30 Emilia clips ------
 #

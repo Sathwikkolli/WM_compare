@@ -5,7 +5,8 @@ Every experiment run in this project, newest first. One row per directory in
 
 | Date | Experiment | Headline finding | Status |
 |---|---|---|---|
-| 2026-08-05 | [align-method-bakeoff](2026-08-05_align-method-bakeoff/) | Which alignment method to use for non-blind watermark detection — 6 methods x 20 attacks x 30 Emilia clips | **planned** |
+| 2026-08-10 | [aware-detection-ab](2026-08-10_aware-detection-ab/) | First **negative control** for AWARE — 20 watermarked vs. 20 unwatermarked clips across 11 conditions. Answers whether the detector fires on the watermark or on speech. | **planned** |
+| 2026-08-05 | [align-method-bakeoff](2026-08-05_align-method-bakeoff/) | **`gcc_phat` wins** — sample-exact on crop, 0% false-shift, best confidence, 20x faster than audalign. `dtw_subseq` disqualified (22.8% false-shift). **No method aligns time-stretched audio.** See [ANALYSIS.md](2026-08-05_align-method-bakeoff/ANALYSIS.md) | **complete** |
 
 ## Status values
 

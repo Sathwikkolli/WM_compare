@@ -138,6 +138,20 @@ Measured residuals on a clean synthetic 1 s crop:
   and runs, but that pin is now violated -- re-verify before trusting new
   AWARE numbers.
 - Smoke test (clip 0, 3 attacks, 8 configs, 6 methods): 48 rows, 0 skipped, 12.2 s.
+- Full single-clip run: **456 rows, 184.6 s** (14.5 s clip). x30 clips as a Slurm
+  array -> ~3 min per task. Job time limit set to 45 min.
+
+### One config always fails: `opus/496k`
+
+`VOX_GRID['opus']` is `[(b*16) for b in [1,2,4,8,16,31]]` -> 16k..**496k**, but
+libopus caps at 256 kbps, so ffmpeg exits 234 and the config SKIPs. 76 of 77
+configs run.
+
+This is inherited from the VoxWatermark transcription, not introduced here --
+which means the existing `run_vox.py` / `exp_v12_metapxyl_compare.py` runs have
+been silently dropping this config too (`except Exception: continue`). Harmless
+for alignment (256k vs 496k opus is indistinguishable), but worth knowing when
+reading the watermark benchmark tables.
 
 ## Known coverage gap
 
