@@ -1,21 +1,20 @@
 """
-ab_aware/plot_confusion.py -- the confusion matrix as a figure.
+ab_aware/plot_confusion.py -- confusion matrices as figures.
 
-analyze.py already prints the confusion matrix as a markdown table. This draws
-it, because a 2x2 with the four outcomes named is the fastest way to explain to
-someone what the detector actually does -- and in particular that the right-hand
-column (the unwatermarked clips) exists at all, which is the whole point of this
-experiment.
+analyze.py prints the pooled confusion matrix as a markdown table. This draws
+it, because a 2x2 with the four outcomes named is the fastest way to show what
+the detector does -- and in particular that the bottom row (the unwatermarked
+clips) exists at all, which is the point of this experiment.
 
-It imports analyze.py rather than recomputing anything, so the figure and
-summary.md can never disagree.
+Imports analyze.py rather than recomputing, so the numbers cannot drift from
+summary.md.
 
-TWO PANELS, always:
-  left   the codebase default, conf >= 0.5
-  right  the calibrated threshold -- just above the highest-scoring clean clip,
-         i.e. the strictest cut that still produces zero false positives
-Showing one alone invites the question "why that threshold?"; showing both makes
-the cost of the default visible.
+TWO MODES
+  default   one figure, two big panels: default threshold vs calibrated.
+            Pooled over all conditions unless --condition is given.
+  --grid    one small matrix per condition (11) plus POOLED, in one figure.
+            Written at BOTH thresholds -> two files. This is the "everything"
+            view: every attack and the clean control, side by side.
 
 WHAT THE FOUR CELLS MEAN
   TP  watermarked, and we said so                  -- correct
@@ -26,11 +25,26 @@ WHAT THE FOUR CELLS MEAN
 FP is the expensive error, and it is the one no earlier benchmark in this repo
 could measure, because they scored watermarked audio only.
 
+WHICH NEGATIVES CALIBRATE THE THRESHOLD (this bit matters)
+
+  default            ALL negatives, pooled over every condition -- what
+                     analyze.py does, so figures match summary.md's `TPR@cal`.
+  --local-threshold  only the chosen condition's negatives. Lower, so it
+                     recovers more true positives -- but it assumes you KNOW
+                     which attack happened, which you do not in deployment.
+                     An upper bound on what is recoverable, never a deployable
+                     number. Only applies with --condition.
+
+  For highpass_0.2 the two differ sharply: pooled 0.2463 -> 4/20,
+  condition-local 0.1623 -> 11/20. Same data, same detector; only the
+  calibration set changed. Never show both without saying which is which.
+
 Usage:
-    python plot_confusion.py
-    python plot_confusion.py --condition highpass_0.2     # one condition
-    python plot_confusion.py --out /path/to/fig.png
-    AB_RUN=2026-08-10_aware-detection-ab python plot_confusion.py
+    python plot_confusion.py                                             # pooled, 2 panels
+    python plot_confusion.py --grid                                      # ALL conditions
+    python plot_confusion.py --condition highpass_0.2                    # matches summary.md
+    python plot_confusion.py --condition highpass_0.2 --local-threshold  # upper bound
+    AB_RUN=2026-08-10_aware-detection-ab python plot_confusion.py --grid
 """
 import os
 import sys
@@ -47,6 +61,7 @@ from analyze import (                     # noqa: E402
     load_rows, usable, calibrated_threshold, confusion,
     DEFAULT_THRESH, FIG_DIR, RUN,
 )
+from attacks_ab import ORDER              # noqa: E402
 
 OK = "#2e7d32"      # correct   -- green
 BAD = "#c62828"     # incorrect -- red
@@ -56,7 +71,8 @@ def get_arg(argv, flag, default, cast=str):
     return cast(argv[argv.index(flag) + 1]) if flag in argv else default
 
 
-def panel(ax, tp, fn, fp, tn, title, thresh, note=""):
+def _cells(ax, tp, fn, fp, tn, big):
+    """Shared 2x2 drawing. `big` toggles the verbose labelling."""
     counts = np.array([[tp, fn], [fp, tn]])
     correct = np.array([[True, False], [False, True]])
     row_tot = counts.sum(axis=1, keepdims=True)
@@ -65,28 +81,48 @@ def panel(ax, tp, fn, fp, tn, title, thresh, note=""):
     ax.set_xlim(0, 2)
     ax.set_ylim(0, 2)
     ax.invert_yaxis()
-
     for i in range(2):
         for j in range(2):
             colour = OK if correct[i, j] else BAD
-            # intensity tracks the share of that TRUE row, so an empty error
-            # cell stays visibly empty instead of reading as a light colour
+            # intensity tracks share of the TRUE row, so an empty error cell
+            # stays visibly empty rather than reading as a pale colour
             alpha = 0.12 + 0.75 * float(frac[i, j])
             ax.add_patch(plt.Rectangle((j, i), 1, 1, facecolor=colour,
-                                       alpha=alpha, edgecolor="white", lw=3))
-            ax.text(j + .5, i + .38, f"{counts[i, j]}",
-                    ha="center", va="center", fontsize=30, fontweight="bold",
-                    color="#111")
-            ax.text(j + .5, i + .66, f"{100 * frac[i, j]:.1f}% of row",
-                    ha="center", va="center", fontsize=9, color="#333")
+                                       alpha=alpha, edgecolor="white",
+                                       lw=3 if big else 2))
+            ax.text(j + .5, i + (.38 if big else .5), f"{counts[i, j]}",
+                    ha="center", va="center",
+                    fontsize=30 if big else 17,
+                    fontweight="bold", color="#111")
+            if big:
+                ax.text(j + .5, i + .66, f"{100 * frac[i, j]:.1f}% of row",
+                        ha="center", va="center", fontsize=9, color="#333")
 
-    labels = [["TP  correct", "FN  missed it"],
-              ["FP  false alarm", "TN  correct"]]
-    for i in range(2):
-        for j in range(2):
-            ax.text(j + .5, i + .12, labels[i][j], ha="center", va="center",
-                    fontsize=9.5, fontweight="bold", color="#222")
+    if big:
+        labels = [["TP  correct", "FN  missed it"],
+                  ["FP  false alarm", "TN  correct"]]
+        for i in range(2):
+            for j in range(2):
+                ax.text(j + .5, i + .12, labels[i][j], ha="center",
+                        va="center", fontsize=9.5, fontweight="bold",
+                        color="#222")
 
+    for s in ax.spines.values():
+        s.set_visible(False)
+    ax.tick_params(length=0)
+    return frac
+
+
+def rates(tp, fn, fp, tn):
+    tpr = tp / max(tp + fn, 1)
+    fpr = fp / max(fp + tn, 1)
+    prec = tp / (tp + fp) if (tp + fp) else float("nan")
+    acc = (tp + tn) / max(tp + fn + fp + tn, 1)
+    return tpr, fpr, prec, acc
+
+
+def panel(ax, tp, fn, fp, tn, title, thresh, note=""):
+    _cells(ax, tp, fn, fp, tn, big=True)
     ax.set_xticks([.5, 1.5])
     ax.set_xticklabels(['detector said\n"watermarked"', 'detector said\n"clean"'],
                        fontsize=10)
@@ -94,51 +130,110 @@ def panel(ax, tp, fn, fp, tn, title, thresh, note=""):
     ax.set_yticklabels(["actually\nwatermarked", "actually\nclean"], fontsize=10)
     ax.xaxis.set_ticks_position("top")
     ax.xaxis.set_label_position("top")
-    for s in ax.spines.values():
-        s.set_visible(False)
-    ax.tick_params(length=0)
 
-    tpr = tp / max(tp + fn, 1)
-    fpr = fp / max(fp + tn, 1)
-    prec = tp / max(tp + fp, 1) if (tp + fp) else float("nan")
-    acc = (tp + tn) / max(tp + fn + fp + tn, 1)
-
+    tpr, fpr, prec, acc = rates(tp, fn, fp, tn)
     ax.set_title(f"{title}\nconf >= {thresh:.4f}", fontsize=12,
                  fontweight="bold", pad=38)
     ax.text(1.0, 2.30,
-            f"recall (TPR) {100*tpr:.1f}%     "
-            f"false alarms (FPR) {100*fpr:.1f}%\n"
+            f"recall (TPR) {100*tpr:.1f}%     false alarms (FPR) {100*fpr:.1f}%\n"
             f"precision {100*prec:.1f}%     accuracy {100*acc:.1f}%"
             + (f"\n{note}" if note else ""),
             ha="center", va="top", fontsize=10.5)
 
 
+def mini(ax, tp, fn, fp, tn, title, highlight=False):
+    _cells(ax, tp, fn, fp, tn, big=False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    tpr, fpr, _, _ = rates(tp, fn, fp, tn)
+    ax.set_title(title, fontsize=11,
+                 fontweight="bold" if highlight else "normal",
+                 color="#c62828" if highlight else "#111", pad=6)
+    ax.set_xlabel(f"caught {tp}/{tp+fn}   false alarms {fp}/{fp+tn}",
+                  fontsize=9, labelpad=6)
+
+
+def grid_figure(rows, thresh, thresh_label, out):
+    """One mini matrix per condition + POOLED, all at the same threshold."""
+    conds = [c for c in ORDER if usable(rows, cond=c, arm="wm")]
+    panels = [(c, [r["conf"] for r in usable(rows, cond=c, arm="wm")],
+                  [r["conf"] for r in usable(rows, cond=c, arm="clean")])
+              for c in conds]
+    panels.append(("POOLED (all conditions)",
+                   [r["conf"] for r in usable(rows, arm="wm")],
+                   [r["conf"] for r in usable(rows, arm="clean")]))
+
+    ncol = 4
+    nrow = int(np.ceil(len(panels) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(3.3 * ncol, 3.5 * nrow),
+                             squeeze=False)
+    for k, (name, pos, neg) in enumerate(panels):
+        ax = axes[k // ncol][k % ncol]
+        tp, fn, fp, tn = confusion(pos, neg, thresh)
+        # flag any condition that loses more than half the positives
+        bad = (tp / max(tp + fn, 1)) < 0.5
+        mini(ax, tp, fn, fp, tn, name, highlight=bad)
+    for k in range(len(panels), nrow * ncol):
+        axes[k // ncol][k % ncol].axis("off")
+
+    fig.suptitle(f"AWARE detection -- confusion matrix per condition "
+                 f"({thresh_label}, conf >= {thresh:.4f})",
+                 fontsize=14, fontweight="bold", y=0.995)
+    fig.text(0.5, 0.012,
+             "Each panel:  top-left TP (caught)  |  top-right FN (missed)  |  "
+             "bottom-left FP (false alarm)  |  bottom-right TN (correctly ignored).   "
+             "Red titles = more than half the watermarked clips missed.",
+             ha="center", fontsize=9.5, style="italic", color="#444")
+    fig.tight_layout(rect=[0, 0.035, 1, 0.965])
+    fig.savefig(out, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {out}")
+
+
 def main(argv):
     cond = get_arg(argv, "--condition", None)
-    out = get_arg(argv, "--out", os.path.join(FIG_DIR, "confusion.png"))
-
     rows = load_rows()
+
+    # analyze.py calibrates on ALL negatives; match it so figures agree with
+    # summary.md. --local-threshold opts into the condition-only calibration.
+    neg_all = [r["conf"] for r in usable(rows, arm="clean")]
+    t_pooled = calibrated_threshold(neg_all)
+
+    if "--grid" in argv:
+        os.makedirs(FIG_DIR, exist_ok=True)
+        grid_figure(rows, DEFAULT_THRESH, "default threshold",
+                    os.path.join(FIG_DIR, "confusion_grid_default.png"))
+        grid_figure(rows, t_pooled, "calibrated threshold",
+                    os.path.join(FIG_DIR, "confusion_grid_calibrated.png"))
+        print(f"  run={RUN}  conditions={len(ORDER)}  "
+              f"pooled calibrated threshold={t_pooled:.4f}")
+        return
+
+    out = get_arg(argv, "--out", os.path.join(FIG_DIR, "confusion.png"))
     pos = [r["conf"] for r in usable(rows, cond=cond, arm="wm")]
     neg = [r["conf"] for r in usable(rows, cond=cond, arm="clean")]
     if not pos or not neg:
         raise SystemExit(f"need both arms; got {len(pos)} wm / {len(neg)} clean"
                          + (f" for condition {cond!r}" if cond else ""))
 
-    t_cal = calibrated_threshold(neg)
+    local = "--local-threshold" in argv and cond
+    t_cal = calibrated_threshold(neg) if local else t_pooled
+    note = ("calibrated on THIS condition only -- upper bound, assumes the "
+            "attack is known" if local else
+            "strictest cut with zero false positives, all conditions")
 
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 6.4))
     panel(axes[0], *confusion(pos, neg, DEFAULT_THRESH),
           title="Default threshold", thresh=DEFAULT_THRESH)
     panel(axes[1], *confusion(pos, neg, t_cal),
-          title="Calibrated threshold", thresh=t_cal,
-          note="strictest cut with zero false positives")
+          title="Calibrated threshold", thresh=t_cal, note=note)
 
     scope = f"condition: {cond}" if cond else "pooled over all 11 conditions"
     fig.suptitle(f"AWARE detection -- confusion matrix  ({scope}, "
                  f"n={len(pos)} watermarked / {len(neg)} unwatermarked)",
                  fontsize=13.5, y=1.0)
     fig.text(0.5, 0.015,
-             "The right-hand column of each matrix is the contribution of this "
+             "The bottom row of each matrix is the contribution of this "
              "experiment: earlier benchmarks scored watermarked audio only, so a "
              "detector stuck on \"yes\" would have looked perfect.",
              ha="center", fontsize=9.5, style="italic", color="#444")
@@ -148,11 +243,11 @@ def main(argv):
     fig.savefig(out, dpi=170, bbox_inches="tight")
     plt.close(fig)
     print(f"wrote {out}")
-    print(f"  run={RUN}  scope={scope}")
-    print(f"  default   {DEFAULT_THRESH:.4f} -> TP/FN/FP/TN = "
+    print(f"  run={RUN}  scope={scope}  calibration="
+          f"{'condition-local' if local else 'pooled'}")
+    print(f"  default    {DEFAULT_THRESH:.4f} -> TP/FN/FP/TN = "
           f"{confusion(pos, neg, DEFAULT_THRESH)}")
-    print(f"  calibrated {t_cal:.4f} -> TP/FN/FP/TN = "
-          f"{confusion(pos, neg, t_cal)}")
+    print(f"  calibrated {t_cal:.4f} -> TP/FN/FP/TN = {confusion(pos, neg, t_cal)}")
 
 
 if __name__ == "__main__":

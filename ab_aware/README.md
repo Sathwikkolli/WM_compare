@@ -27,7 +27,8 @@ sbatch ab_aware.sbatch          # array 0-39, one task per clip
 
 # after the array finishes
 python analyze.py               # -> summary.md + data/metrics.csv + figures/
-python plot_confusion.py        # -> figures/confusion.png
+python plot_confusion.py        # -> figures/confusion.png        (pooled, 2 panels)
+python plot_confusion.py --grid # -> figures/confusion_grid_*.png (every condition)
 ```
 
 `embed.py` prints a clean-audio round-trip check and warns loudly if any
