@@ -27,6 +27,7 @@ sbatch ab_aware.sbatch          # array 0-39, one task per clip
 
 # after the array finishes
 python analyze.py               # -> summary.md + data/metrics.csv + figures/
+python plot_confusion.py        # -> figures/confusion.png
 ```
 
 `embed.py` prints a clean-audio round-trip check and warns loudly if any
@@ -42,6 +43,7 @@ downstream number would be noise.
 | `attacks_ab.py` | The 10-distortion grid + `clean` control |
 | `run_ab.py` | Slurm-array runner, one task per clip -> `data/raw_<id>.csv` |
 | `analyze.py` | All statistics -> `summary.md`. **Metric meanings documented at the top.** |
+| `plot_confusion.py` | The confusion matrix as a figure, at both thresholds. Imports `analyze.py` rather than recomputing, so it cannot disagree with `summary.md`. |
 | `ab_aware.sbatch` | Great Lakes job, array 0-39 |
 
 ## What makes this benchmark trustworthy

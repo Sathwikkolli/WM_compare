@@ -111,7 +111,7 @@ def fig_heatmap(rows):
 
     plt.figure(figsize=(max(9, 0.55 * len(attacks) + 3), 0.5 * len(methods) + 3))
     plt.imshow(grid, aspect="auto", cmap="RdYlGn", vmin=0, vmax=100)
-    plt.colorbar(label="hit rate @ 20 ms (%)")
+    plt.colorbar(label=f"hit rate @ {TOL_MS:.0f} ms (%)")
     plt.xticks(range(len(attacks)), attacks, rotation=60, ha="right", fontsize=8)
     plt.yticks(range(len(methods)), methods, fontsize=9)
     for i in range(len(methods)):
@@ -120,7 +120,8 @@ def fig_heatmap(rows):
                 plt.text(j, i, f"{grid[i, j]:.0f}", ha="center", va="center",
                          fontsize=7,
                          color="black" if 25 < grid[i, j] < 75 else "white")
-    plt.title("Hit rate @ 20 ms -- method x attack")
+    plt.title(f"Hit rate @ {TOL_MS:.0f} ms -- method x attack "
+              f"(codec attacks bounded at {CODEC_TOL_MS:.0f} ms)")
     plt.tight_layout()
     plt.savefig(os.path.join(FIG_DIR, "heatmap.png"), dpi=150)
     plt.close()
@@ -155,7 +156,7 @@ def fig_strength_curves(rows):
             ax.legend(fontsize=6)
     for k in range(len(attacks), nrow * ncol):
         axes[k // ncol][k % ncol].axis("off")
-    fig.suptitle("Hit rate @ 20 ms vs attack strength", y=1.0)
+    fig.suptitle(f"Hit rate @ {TOL_MS:.0f} ms vs attack strength", y=1.0)
     fig.tight_layout()
     fig.savefig(os.path.join(FIG_DIR, "strength_curves.png"), dpi=140)
     plt.close(fig)
@@ -212,7 +213,7 @@ def fig_reliability(rows):
             plt.plot(xs, ys, marker="o", ms=4, lw=1.5, label=m)
     plt.plot([0, 1], [0, 100], "k--", lw=1, alpha=0.6, label="perfectly calibrated")
     plt.xlabel("method's reported confidence")
-    plt.ylabel("observed hit rate @ 20 ms (%)")
+    plt.ylabel(f"observed hit rate @ {TOL_MS:.0f} ms (%)")
     plt.title("Reliability -- can you trust it to know when it failed?")
     plt.ylim(-5, 105)
     plt.grid(alpha=0.3)
