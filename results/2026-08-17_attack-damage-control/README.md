@@ -1,8 +1,12 @@
 # Attack-damage control — is the audio destroyed, or is AWARE fragile?
 
-**Status:** planned — not yet run
+**Status:** complete — see [summary.md](summary.md)
 **Date:** 2026-08-17
 **Code:** `WM_compare/damage_ab/`
+
+> **Result in one line:** both failing conditions destroy the audio equally in
+> both arms (arm gaps ≤ 0.06 PESQ everywhere), so neither is evidence about
+> AWARE — and AWARE holds well past the point the audio stops being usable.
 
 ## Question
 
@@ -55,8 +59,9 @@ control, not an independent negative sample. FPR lives in
 
 Cutoffs are specified in **Hz** and the ratio derived, because `a_highpass` takes
 a fraction of the sample rate and that indirection already produced one error in
-this repo (`THRESHOLD_DECISION.md` records `highpass_0.2` as a 1600 Hz cutoff; at
-16 kHz it is 3200 Hz). `sweep.py` asserts at import that its two anchor cells
+this repo (`THRESHOLD_DECISION.md` recorded `highpass_0.2` as a 1600 Hz cutoff; at
+16 kHz it is 3200 Hz — corrected there on 2026-08-17). `sweep.py` asserts at
+import that its two anchor cells
 equal the A/B's, so the sweep cannot silently drift off the run it is anchored to.
 
 ## Metrics
@@ -105,6 +110,73 @@ material gap — are fixed as of this document.
 5. **Arm gaps stay under 0.3 everywhere.** If a gap exceeds it, the watermark
    genuinely does make audio more fragile under that attack — which would be a
    real finding and would falsify the framing above.
+
+## Outcome — how the predictions scored
+
+Written after the run, against the predictions above, unedited.
+
+| # | Prediction | Outcome |
+|---|---|---|
+| 1 | `hp_3200hz` destructive, ~1.89% band retained, arm gap ≈ 0 | **held.** src PESQ 1.32, band 1.9% (wm) / 2.4% (src), arm gap 0.01 |
+| 2 | `quant_8lvl` destructive, band energy *up* | **held.** src PESQ 1.04, band 251% (wm) / 225% (src), arm gap −0.00 |
+| 3 | high-pass breaking point between 500 and 1500 Hz | **FAILED.** It broke at **2500 Hz** — AWARE is substantially more robust than predicted |
+| 4 | `quant_256lvl` and `mp3_32k` survive | **held**, though `quant_256lvl` lands at PESQ 2.40, only just above the floor |
+| 5 | arm gaps stay under 0.3 everywhere | **held.** Largest gap anywhere is 0.06, at `mp3_32k`, in the watermark's favour |
+
+Prediction 3 failing is the substantive news, and it failed in AWARE's favour.
+
+## What the run establishes
+
+**1. Neither A/B failure is watermark-specific.** Unwatermarked audio is damaged
+identically — the largest arm gap over all 15 conditions is 0.06 PESQ. The
+pre-registered criterion returns DESTRUCTIVE for both cells.
+
+**2. Detection outlives usability, by a wide margin.**
+
+| | audio crosses PESQ 2.0 | AWARE crosses conf 0.5 |
+|---|---|---|
+| high-pass | ≈ 850 Hz (interpolated, 500→1000) | **2500 Hz** |
+| quantize | ≈ 144 levels (interpolated, 256→64) | **8 levels** |
+
+Inside that gap AWARE is not merely surviving: at `hp_1000hz` (PESQ 1.81) it is
+5/5 at conf 1.000 with bit accuracy 1.000, and at `quant_32lvl` (PESQ 1.17) it is
+5/5 with perfect bits.
+
+**3. The two mechanisms are opposite.** High-pass *empties* the 1000–4000 Hz band
+(1.9% retained); quantisation *floods* it with rounding noise (251%). Both end in
+"not detected". Any mitigation would have to be different for each.
+
+**4. No false alarms.** The unwatermarked arm stayed at conf 0.04–0.14 across all
+15 conditions, never approaching 0.5 — consistent with the null test, though this
+run cannot produce an FPR (see Limits #2).
+
+## Known issues with this run
+
+- **The `verdict` column reads misleadingly on three rows.** `hp_1000hz`,
+  `quant_64lvl` and `quant_32lvl` are labelled DESTRUCTIVE while AWARE detects
+  5/5 with perfect bit accuracy. The criterion is judging *the attack*, which is
+  what it was defined to do, but the label invites the opposite reading. The
+  criterion is left exactly as pre-registered; `summary.md` needs a second column
+  separating "attack destroyed the audio" from "AWARE lost the watermark". The
+  gap between those two is the finding, so it should not be collapsed into one
+  word.
+- **`quant_4lvl` is non-monotone**: confidence rises 0.083 → 0.157 as the attack
+  gets *harsher*, and the unwatermarked arm rises with it (0.041 → 0.139). Both
+  stay far below 0.5, so no false positive — but the direction matches the 440 Hz
+  tonal false positive in the null test, and 4-level quantisation does produce a
+  near-square waveform. Same defect, not a new one.
+- **`src_pesq` is non-monotone at the bottom** (`hp_2000hz` 1.53 vs `hp_2500hz`
+  1.64). PESQ saturating, per Limit #5. Nothing below ~1.7 should be read as an
+  ordering.
+
+## Open question this run raises
+
+At both failing cells the recovered payload sits above chance while confidence is
+dead: median bit accuracy **0.65** at `hp_3200hz` (conf 0.135) and **0.70** at
+`quant_8lvl` (conf 0.083), against a 0.50 floor. If that holds per clip, AWARE's
+confidence head is giving up before the payload does. **Not claimed here** —
+`summary.md` prints medians only, and confirming it needs the per-clip bit
+accuracies from `data/raw.csv`.
 
 ## Limits (known before running)
 
