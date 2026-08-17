@@ -27,6 +27,19 @@ WHAT EACH METRIC TELLS YOU  (read this part slowly)
       Accepting with a wrong offset is not a success, so correctness is required,
       not just confidence. This single number is what the detector can rely on.
 
+  false alarms WITHOUT calibration      <- what experiment B is worth
+      The 1% above is true by construction, so it cannot tell you how bad the
+      problem is. Three thresholds nobody needed a null to pick:
+        accept-all  -- how often a mismatched pair still returns an offset.
+                       Neither method has a "not present" answer, so this is
+                       usually ~100% and is the baseline confidence must fix.
+        conf>=0.5   -- the naive midpoint of the squashed [0,1] score, and the
+                       same 0.5 the detectors defaulted to in the null test.
+        keep-95%    -- tau set on matched data ALONE to retain 95% of genuine
+                       frames. Its false-accept rate is the number this whole
+                       experiment exists to reveal: what a matched-data-only
+                       calibration would have shipped.
+
   separation AUC
       Does the score tell "frame is in here" from "frame is not in here" at all,
       ignoring whether the offset is right? Low AUC with a decent hit rate means
@@ -221,17 +234,26 @@ def main(argv):
     w("Experiment A, voiced frames only (silent frames are section 3).\n")
     for kind in kinds:
         w(f"\n**reference = {kind}**\n")
-        w("| frame | " + " | ".join(f"{m} @50ms | {m} @20ms" for m in methods) + " | n |")
-        w("|---" * (1 + 2 * len(methods)) + "|---|")
+        w("| frame | " + " | ".join(f"{m} @50ms | {m} @20ms | {m} @1ms"
+                                    for m in methods) + " | n |")
+        w("|---" * (1 + 3 * len(methods)) + "|---|")
         for L_ms in lens:
             cells, n_show = [], 0
             for m in methods:
                 sel = [r for r in A if r["method"] == m and r["frame_len_ms"] == L_ms
                        and r["ref_kind"] == kind and r["stratum"] == "voiced"]
                 n_show = max(n_show, len(sel))
-                cells += [f"{100*hit(sel, 50.0):.1f}%" if sel else "-",
-                          f"{100*hit(sel, 20.0):.1f}%" if sel else "-"]
+                cells += [f"{100*hit(sel, t):.1f}%" if sel else "-"
+                          for t in sorted(TOL_MS, reverse=True)]
+                for t in TOL_MS:
+                    out.append({"section": "hit_rate", "method": m,
+                                "ref_kind": kind, "frame_len_ms": L_ms,
+                                "stratum": "voiced", "tol_ms": t,
+                                "hit_rate": hit(sel, t), "n_a": len(sel)})
             w(f"| {L_ms} ms | " + " | ".join(cells) + f" | {n_show} |")
+    w("\n`@1ms` is the strict bar -- it only matters if something downstream needs "
+      "sample-grade sync. A large gap between `@1ms` and `@20ms` means the method "
+      "is resolution-limited, not wrong.\n")
 
     # ---- 2. the headline ---------------------------------------------------
     w(f"\n## 2. Useful-accept rate at FA <= {100*target_fa:.0f}%  <- HEADLINE\n")
@@ -298,8 +320,61 @@ def main(argv):
                         "n_a": len(a), "n_b": len(b)})
         w(f"| {L_ms} ms | " + " | ".join(cells) + " |")
 
-    # ---- 5. comparability --------------------------------------------------
-    w("\n## 5. Is one global threshold valid across reference lengths?\n")
+    # ---- 5. what the null bought -------------------------------------------
+    w("\n## 5. What experiment B is worth: false alarms without calibration\n")
+    w("Section 2's 1% holds **by construction** -- tau was chosen to make it so, so "
+      "it says nothing about how bad the problem is. This is the counterfactual: "
+      "how often does unrelated audio get accepted at a threshold you would have "
+      "picked WITHOUT running a null?\n")
+    w("- **accept-all** -- fraction of mismatched pairs that still come back with "
+      "an offset. Neither method has a 'not present' answer, so this is the "
+      "baseline the confidence score has to fix.")
+    w("- **conf>=0.5** -- the naive midpoint of the squashed [0,1] confidence, and "
+      "the same 0.5 the detectors defaulted to in "
+      "`2026-08-14_detector-null-test`.")
+    w("- **keep-95%** -- tau set from experiment A *alone*, to retain 95% of "
+      "genuine frames. This is what you would do with no null data; the FA beside "
+      "it is the price of that choice.\n")
+    w("| frame | method | accept-all | conf>=0.5 | keep-95% tau | its FA |")
+    w("|---|---|---|---|---|---|")
+    for L_ms in lens:
+        for m in methods:
+            a = [r for r in A if r["method"] == m and r["frame_len_ms"] == L_ms
+                 and r["stratum"] == "voiced"]
+            b = [r for r in B if r["method"] == m and r["frame_len_ms"] == L_ms
+                 and r["stratum"] == "voiced"]
+            if not b:
+                continue
+            fa_all = sum(1 for r in b
+                         if r["ok"] and np.isfinite(r["raw_score"])) / float(len(b))
+
+            n_conf = sum(1 for r in b if np.isfinite(r["confidence"]))
+            fa_half = (sum(1 for r in b if np.isfinite(r["confidence"])
+                           and r["confidence"] >= 0.5) / float(n_conf)
+                       if n_conf else float("nan"))
+
+            # 5th percentile of the matched scores = the bar that keeps 95% of
+            # genuine frames. A calibrator with no null data has nothing else.
+            tau95 = pct([r["raw_score"] for r in a if r["ok"]], 5)
+            n_b_ok = sum(1 for r in b if np.isfinite(r["raw_score"]))
+            fa95 = (sum(1 for r in b if np.isfinite(r["raw_score"])
+                        and r["raw_score"] >= tau95) / float(n_b_ok)
+                    if n_b_ok and np.isfinite(tau95) else float("nan"))
+
+            w(f"| {L_ms} ms | {m} | {100*fa_all:.1f}% | "
+              + (f"{100*fa_half:.1f}%" if np.isfinite(fa_half) else "-") + " | "
+              + (f"{tau95:.2f}" if np.isfinite(tau95) else "-") + " | "
+              + (f"**{100*fa95:.1f}%**" if np.isfinite(fa95) else "-") + " |")
+            out.append({"section": "naive_fa", "method": m, "ref_kind": "ALL",
+                        "frame_len_ms": L_ms, "stratum": "voiced",
+                        "fa_accept_all": fa_all, "fa_conf_half": fa_half,
+                        "tau_keep95": tau95, "fa_keep95": fa95,
+                        "n_a": len(a), "n_b": len(b)})
+    w("\nThe last column is the cost of skipping this experiment: the false-accept "
+      "rate a matched-data-only calibration would have shipped.\n")
+
+    # ---- 6. comparability --------------------------------------------------
+    w("\n## 6. Is one global threshold valid across reference lengths?\n")
     w("Null-score percentiles per reference kind. If p99 moves materially with "
       "reference length, a single threshold is INVALID and tau must be set per "
       "condition. This is the threat to validity named in the run README.\n")
@@ -326,8 +401,8 @@ def main(argv):
                        "THRESHOLD MUST BE SET PER REFERENCE LENGTH")
             w(f"| **{m}** | *p99 spread* | | | | **{spread:.2f}x** | {verdict} |")
 
-    # ---- 6. cost -----------------------------------------------------------
-    w("\n## 6. Runtime\n")
+    # ---- 7. cost -----------------------------------------------------------
+    w("\n## 7. Runtime\n")
     w("| method | ref | median s/call | p95 |")
     w("|---|---|---|---|")
     for m in methods:

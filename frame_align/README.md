@@ -30,9 +30,26 @@ python refs.py                  # SELF-TEST: home_start must be recoverable
 python refs.py --probe          # does Emilia have real 60s/180s clips?
 python make_frames.py           # -> frames.json, prints the row budget
 
-sbatch frame_align.sbatch       # array 0-29, phase 1 (native refs)
+sbatch --export=ALL,PHASE=1 frame_align.sbatch   # native refs (already done)
 
 python score_frames.py          # -> summary.md + data/metrics.csv
+```
+
+Phase 2 adds the 60 s and 180 s references and settles prediction 2. Time one
+clip first — the 180 s cost is extrapolated from phase 1, not measured:
+
+```bash
+time python run_frames.py --clip 0 --ref-kinds native,60,180
+```
+
+Then archive phase 1's data (results/README.md rule 1 — never overwrite `data/`)
+and submit. The sbatch refuses to start phase 2 until you have:
+
+```bash
+cd $WM_COMPARE_BASE/results/2026-08-18_frame-align-null
+mkdir -p data_phase1 && mv data/raw_clip*.csv data/metrics.csv data_phase1/
+cp summary.md summary_phase1.md
+sbatch --export=ALL,PHASE=2 $WM_COMPARE_BASE/frame_align/frame_align.sbatch
 ```
 
 `refs.py` self-test is not optional. It verifies that a frame cut at a known
@@ -93,19 +110,24 @@ small.
 
 ## Status
 
-Phase 1 (native references) is built and smoke-tested end to end on synthetic
-audio; **it has not been run on Emilia.** No real numbers exist yet.
+**Phase 1 complete** (2026-08-18, native references, 14,400 rows). Headline:
+alignment needs ~500 ms, one AWARE hop is unalignable at 5.1%, and `aof` beats
+`gcc_phat` at every frame length ≥250 ms — reversing the bake-off. Two of five
+registered predictions were refuted. Full conclusion in
+`results/2026-08-18_frame-align-null/README.md`.
 
-Phase 2 (60 s / 180 s) is implemented but needs `frame_align.sbatch` re-timed
-from phase 1's logs before submitting — 180 s references are ~20x the correlation
-length.
+**Phase 2 built, not run.** Re-timed above from phase 1's measured 0.018/0.033 s
+per call. Settles prediction 2.
 
-Phase 3 (attacked frames) is **not** implemented and belongs in its own results
+**Phase 3 (attacked frames) not implemented** — belongs in its own results
 directory.
 
 ## Not implemented
 
 - **Plots.** `score_frames.py` writes tables only. The knee is a curve and wants
-  a figure, but nothing should be plotted before there are real numbers to plot.
+  a figure; phase 1's numbers now justify building one.
 - **Attacked frames.** Clean-only by design: without the clean floor you cannot
   tell a frame-length failure from a distortion failure.
+- **Why `gcc_phat` degrades faster than `aof` on short frames.** The standing
+  hypothesis is that PHAT whitening is noise-dominated when there is little
+  spectrum to average over. Testable by disabling whitening; not tested.
