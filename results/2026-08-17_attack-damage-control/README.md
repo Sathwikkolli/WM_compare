@@ -169,6 +169,31 @@ run cannot produce an FPR (see Limits #2).
   1.64). PESQ saturating, per Limit #5. Nothing below ~1.7 should be read as an
   ordering.
 
+## What is NOT in this directory
+
+`results/README.md` rule 6 says raw numbers and figures are committed, and rule 3
+wants `params.json` sufficient to reproduce. This directory does not fully meet
+that, and pretending otherwise would be worse than saying so:
+
+| Expected | Status |
+|---|---|
+| `summary.md` | present |
+| `data/by_condition.csv` | present (the per-condition aggregates) |
+| `data/raw.csv` | **missing** — 75 per-clip rows, on Great Lakes only |
+| `figures/sweep_highpass.png`, `figures/sweep_quantize.png` | **missing** — on Great Lakes only |
+| `params.json` | present but **reconstructed** from console output and the committed code, not emitted by the run. Four fields are unverified and named in its `_unverified` list |
+
+Both missing files live at
+`~/wm_compare/results/2026-08-17_attack-damage-control/` on Great Lakes, and the
+listening audio at `~/wm_compare/damage_ab/work/listen/`. Nothing was deleted;
+they were simply never transferred. Recover with `scp`, or by re-running
+`python analyze.py` there.
+
+**What this costs:** the per-clip bit accuracies are only in `raw.csv`, so the
+open question below cannot be settled from this archive as it stands. Every
+number quoted in `summary.md` and in the tables above is a median or an aggregate
+and is fully backed by `data/by_condition.csv`.
+
 ## Open question this run raises
 
 At both failing cells the recovered payload sits above chance while confidence is

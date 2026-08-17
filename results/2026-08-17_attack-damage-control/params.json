@@ -1,0 +1,73 @@
+{
+  "_note": "Reconstructed from the run's console output and the committed code, NOT written by the run itself. Fields that could not be verified without cluster access are null and named in _unverified below. See the run README section 'What is not in this directory'.",
+
+  "run": "2026-08-17_attack-damage-control",
+  "code": "damage_ab/",
+  "git_commit_at_run": "593205e",
+  "_git_commit_evidence": "the cluster reported 'Already up to date' on git pull while origin/main was at 593205e; e10a2c0 and later commits are laptop-only and postdate the run",
+
+  "host": "Great Lakes, login node gl3115, partition standard, CPU",
+  "conda_env": "wmcompare",
+
+  "work_sr": 16000,
+  "n_bits": 20,
+  "aware_model": "AWARE",
+  "aware_band_hz": [1000, 4000],
+
+  "clips": {
+    "manifest": "/nfs/turbo/umd-hafiz/issf_server_data/emilia/manifests/emilia_curated.csv",
+    "manifest_rows": 896592,
+    "rows_after_min_dur_filter": 435788,
+    "min_dur_s": 9.0,
+    "seed": 0,
+    "n": 5,
+    "design": "matched pairs -- every clip appears in both the src and wm arm",
+    "selected": [
+      {"clip_id": "cl00", "file": "EN_962eJIFL5FY_W000074.wav", "duration_s": 11.1},
+      {"clip_id": "cl01", "file": "EN_Bi8pkvNhdyy_W000145.wav", "duration_s": 13.4},
+      {"clip_id": "cl02", "file": "EN_wBhle3eg9z8_W000026.wav", "duration_s": 15.4},
+      {"clip_id": "cl03", "file": "EN_KXFSheIOQku_W000170.wav", "duration_s": 11.3},
+      {"clip_id": "cl04", "file": "EN_u9d8yrTg5TA_W000318.wav", "duration_s": 9.2}
+    ],
+    "_selected_paths_note": "basenames only -- the full manifest paths were not echoed by make_pairs.py. Re-deriving them needs seed 0 against the manifest above."
+  },
+
+  "embed_round_trip": {
+    "_what": "AWARE detection on the watermarked clips before any attack",
+    "conf_min": 0.9989,
+    "conf_median": 0.9997,
+    "conf_max": 0.9999,
+    "bit_acc_min": 1.0,
+    "bit_acc_median": 1.0,
+    "bit_acc_max": 1.0
+  },
+
+  "conditions": {
+    "control": ["clean"],
+    "anchor": ["mp3_32k"],
+    "highpass_hz": [200, 500, 1000, 1500, 2000, 2500, 3200],
+    "quantize_levels": [256, 64, 32, 16, 8, 4],
+    "total": 15,
+    "rows": 75,
+    "anchor_cells": {
+      "hp_3200hz": "== ab_aware highpass_0.2 (ratio 0.2 x 16000 Hz)",
+      "quant_8lvl": "== ab_aware quantize_8lvl"
+    },
+    "highpass_impl": "julius.highpass_filter (present in the cluster env); cutoff = f_hz / sr",
+    "quantize_impl": "vox_attacks.a_quantization -- grid anchored on the file's own min/max, so zero is generally NOT a level"
+  },
+
+  "pre_registered": {
+    "pesq_floor": 2.0,
+    "material_arm_gap": 0.3,
+    "conf_threshold": 0.5,
+    "_fixed_in": "results/2026-08-17_attack-damage-control/README.md, before the run"
+  },
+
+  "_unverified": [
+    "slurm_job_id -- not captured; the log is damage_ab_<jobid>.log on the cluster",
+    "package versions (librosa, pesq, julius, soundfile, numpy, torch)",
+    "ffmpeg version -- affects codec padding behaviour on the mp3_32k anchor",
+    "full manifest paths of the 5 selected clips"
+  ]
+}
