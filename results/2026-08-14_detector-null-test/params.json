@@ -1,0 +1,108 @@
+{
+  "experiment": "detector-null-test",
+  "date": "2026-08-14",
+  "question": "What do AudioSeal and AWARE score on audio carrying no watermark, and does the 0.5 production threshold hold?",
+
+  "code": {
+    "repo": "WM_compare",
+    "commit": "fb86c8d",
+    "script": "cascade/null_test.py",
+    "sbatch": "cascade/null_test.sbatch"
+  },
+
+  "environment": {
+    "cluster": "Great Lakes (U-M ARC)",
+    "hosts": ["gl3009.arc-ts.umich.edu", "gl3157.arc-ts.umich.edu"],
+    "conda_env": "wmcompare",
+    "python": "3.10",
+    "partition": "standard",
+    "account": "hafiz1",
+    "cpus": 8,
+    "mem": "16G",
+    "started": "2026-08-14T16:01:44-04:00",
+    "finished": "2026-08-14T17:24:32-04:00",
+    "env_vars": {
+      "WM_COMPARE_BASE": "$HOME/wm_compare",
+      "TORCHDYNAMO_DISABLE": "1",
+      "OMP_NUM_THREADS": "$SLURM_CPUS_PER_TASK"
+    }
+  },
+
+  "models": {
+    "loaded": ["audioseal", "aware"],
+    "excluded": ["timbre"],
+    "exclusion_reason": "no detector; adapter returns bit-accuracy vs leftover process state, so it cannot answer presence",
+    "sample_rate_master": 22050,
+    "audioseal_load_s": [9.6, 3.6],
+    "aware_load_s": [1.3, 0.3]
+  },
+
+  "thresholds_evaluated": {
+    "official": { "audioseal": 0.50, "aware": 0.50 },
+    "conservative": { "audioseal": 0.65, "aware": 0.55 }
+  },
+
+  "inputs": {
+    "emilia": {
+      "manifest": "/nfs/turbo/umd-hafiz/issf_server_data/emilia/manifests/emilia_curated.csv",
+      "n": 300,
+      "min_duration_s": 5.0,
+      "shuffle_seed": 0,
+      "passes": 1
+    },
+    "curated": {
+      "dir": "audio/clean_set",
+      "n": 12,
+      "passes": 2,
+      "groups": {
+        "osr_speech": 6,
+        "synthetic": 3,
+        "non_speech": 1,
+        "uncertain": 2
+      },
+      "osr_source": "https://www.voiptroubleshooter.com/open_speech/american.html",
+      "synthetic_spec": {
+        "silence": "20 s of zeros @ 22050 Hz",
+        "whitenoise": "20 s, RandomState(0).randn * 0.05 @ 22050 Hz",
+        "tone": "20 s, 0.3 * sin(2*pi*440*t) @ 22050 Hz"
+      }
+    }
+  },
+
+  "acceptance_criteria_precommitted": {
+    "PASS": "0 detected AND max clean score <= 0.35",
+    "MARGINAL": "0 detected AND max in (0.35, 0.50] -> raise to 0.65",
+    "FAIL": "any file detected",
+    "INVALID": "errors, or repeat passes disagree"
+  },
+
+  "results": {
+    "emilia": {
+      "n": 300,
+      "false_positives_official": 0,
+      "false_positives_conservative": 0,
+      "audioseal": { "min": 0.0000, "median": 0.0000, "p95": 0.0405, "max": 0.1497 },
+      "aware":     { "min": 0.0237, "median": 0.0734, "p95": 0.1635, "max": 0.2723 }
+    },
+    "curated": {
+      "n": 12,
+      "false_positives_official": 1,
+      "false_positives_conservative": 1,
+      "failing_file": "clean_12_tone.wav",
+      "failing_scores": { "audioseal": 0.0000, "aware": 0.9679 },
+      "all_stable_across_passes": true,
+      "audioseal": { "min": 0.0000, "median": 0.0001, "p95": 0.1485, "max": 0.1485 },
+      "aware":     { "min": 0.0036, "median": 0.0538, "p95": 0.9679, "max": 0.9679 }
+    },
+    "decision": "keep 0.5",
+    "speech_only_max_across_all_groups": 0.2723,
+    "statistical_claim": "0/300 supports FPR < 1% at 95% confidence (rule of three) for speech-like content"
+  },
+
+  "known_issues": [
+    "AWARE returns 0.9679 on a pure 440 Hz sine; not fixable by threshold (clears 0.65 too). Tonal-input defect, boundary unmapped.",
+    "Both mp3 inputs triggered libmpg123 header errors and fell back to librosa audioread.",
+    "Non-speech coverage is one 1.3 s file; music is effectively untested.",
+    "No positive control in this run - detection of genuine watermarks at 0.5 is unverified here."
+  ]
+}

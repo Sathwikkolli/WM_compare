@@ -3,9 +3,16 @@
 Every experiment run in this project, newest first. One row per directory in
 `results/`. See `README.md` for the archival convention.
 
+**The production detection threshold and its evidence live in
+[THRESHOLD_DECISION.md](THRESHOLD_DECISION.md).** Read that before changing any
+threshold — it is where the null test and the A/B are reconciled, and the two
+disagree in a way neither run reveals alone.
+
 | Date | Experiment | Headline finding | Status |
 |---|---|---|---|
-| 2026-08-10 | [aware-detection-ab](2026-08-10_aware-detection-ab/) | First **negative control** for AWARE — 20 watermarked vs. 20 unwatermarked clips across 11 conditions. Answers whether the detector fires on the watermark or on speech. | **planned** |
+| 2026-08-17 | [attack-damage-control](2026-08-17_attack-damage-control/) | Does `highpass_0.2` / `quantize_8lvl` destroy the audio, or is AWARE fragile? 5 **matched** clips (unwatermarked + watermarked) × 15 conditions, sweeping high-pass 200→3200 Hz and quantisation 256→4 levels. Criterion pre-registered: destructive iff unwatermarked audio falls below PESQ 2.0 **and** the watermarked arm is not worse by >0.3. **No FPR from this run** — matched arms by design | **planned** |
+| 2026-08-14 | [detector-null-test](2026-08-14_detector-null-test/) | **Keep the 0.5 threshold.** 0 false positives in 300 clean Emilia clips; no speech file anywhere exceeded **0.2723** (headroom +0.23, AudioSeal +0.35). Refutes the "clean speech scores 0.4–0.55" claim, so 0.65 is unnecessary and would cost sensitivity. **One defect:** a pure 440 Hz tone scores AWARE **0.9679** — tonal input, no threshold fixes it. See [summary.md](2026-08-14_detector-null-test/summary.md) | **complete** |
+| 2026-08-10 | [aware-detection-ab](2026-08-10_aware-detection-ab/) | **AUC 0.9747** [0.9605, 0.9871], 0 false positives, **TPR 80.9% @ 0.5** over 11 conditions. 8 of 11 perfect; `highpass_0.2` (0/20) and `quantize_8lvl` (1/20) fail significantly (Holm p=0.0003), both at PESQ ≈ 1.0–1.3. **Its calibrated 0.2463 is refuted** by the null test's 300 negatives reaching 0.2723 — see [THRESHOLD_DECISION.md](THRESHOLD_DECISION.md) | **complete** |
 | 2026-08-05 | [align-method-bakeoff](2026-08-05_align-method-bakeoff/) | **`gcc_phat` wins** — sample-exact on crop, 0% false-shift, best confidence, 20x faster than audalign. `dtw_subseq` disqualified (22.8% false-shift). **No method aligns time-stretched audio.** See [ANALYSIS.md](2026-08-05_align-method-bakeoff/ANALYSIS.md) | **complete** |
 
 ## Status values

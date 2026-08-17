@@ -9,6 +9,13 @@ __pycache__/
 !results/
 !results/**
 
+# damage_ab audio: source, watermarked and ~150 attacked WAVs, all regenerated
+# on the cluster by embed_pairs.py + run_damage.py. Kept OUT of results/ on
+# purpose -- everything under results/ is tracked, and audio does not belong in
+# the archive. scp work/listen/ off Great Lakes to audition it.
+damage_ab/work/
+damage_ab/clips.json
+
 # client production-pipeline audio (re-downloaded on the cluster from Dropbox)
 client_processed/
 client_stage_results.csv
