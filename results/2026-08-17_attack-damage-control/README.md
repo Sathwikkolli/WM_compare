@@ -125,7 +125,9 @@ material gap — are fixed as of this document.
 ## Reproduce
 
 ```bash
-conda activate wmcompare && cd $WM_COMPARE_BASE/damage_ab
+conda activate wmcompare
+export WM_COMPARE_BASE=$HOME/wm_compare    # a login shell does not have this set
+cd $WM_COMPARE_BASE/damage_ab
 python sweep.py                            # checks anchors + ffmpeg
 python make_pairs.py && python embed_pairs.py   # login node
 sbatch damage_ab.sbatch

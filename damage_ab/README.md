@@ -17,8 +17,12 @@ first** — the design, the pre-registered criterion, and the limits live there.
 
 ## Run it
 
+`WM_COMPARE_BASE` is exported by `damage_ab.sbatch` for the batch job, but a
+login shell does not have it — set it before the login-node steps below:
+
 ```bash
 conda activate wmcompare
+export WM_COMPARE_BASE=$HOME/wm_compare      # not set by default in a login shell
 cd $WM_COMPARE_BASE/damage_ab
 
 # sanity checks before burning cluster time
