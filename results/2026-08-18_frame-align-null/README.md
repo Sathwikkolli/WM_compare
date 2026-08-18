@@ -1,6 +1,6 @@
 # Frame-level alignment: resolution limit and false-alarm floor
 
-**Status:** predictions registered, run not yet executed.
+**Status:** phase 1 complete (native references, clean audio). Phase 2 built, not run.
 **Code:** `frame_align/`
 **Predecessor:** `results/2026-08-05_align-method-bakeoff/`
 
@@ -161,7 +161,7 @@ established over a window an order of magnitude coarser than the hop, and hoppin
 then proceeds inside the already-aligned region. 500 ms is the working figure;
 250 ms is available if 80% is acceptable.
 
-### 2. The bake-off winner loses at frame level
+### 2. The bake-off winner loses at frame level — at 20 ms tolerance
 
 `gcc_phat` won `2026-08-05_align-method-bakeoff` on every axis. On frames it is
 **beaten by `aof` at every length from 250 ms up**, most sharply at 250 ms
@@ -170,49 +170,62 @@ then proceeds inside the already-aligned region. 500 ms is the working figure;
 **Whole-clip ranking does not transfer to frames.** Any future aligner choice must
 be made at the frame size it will actually run at.
 
+This reverses **only at the 1 ms bar** — see §5.
+
 Mechanism is untested. Plausible: PHAT divides by magnitude across the whole
 spectrum, which is stable when there is a lot of spectrum to average and
 increasingly noise-dominated as the frame shrinks; MFCC correlation averages over
 ~25 ms analysis windows and degrades more gracefully. Testable by disabling
 whitening. Not tested here — treat as hypothesis.
 
-### 3. Experiment B: there is no reject option
+### 3. Experiment B: no reject option, and the null was worth running
 
-On all 7,200 mismatched pairs both methods returned an offset. Neither ever
-reported "not present". **The confidence score is the only thing preventing a
-confidently wrong alignment**, so any deployment that ignores it will silently
-align unrelated audio.
+On all 7,200 mismatched pairs both methods returned an offset — `accept-all` is
+**100.0%** in every cell that ran. Neither ever reported "not present". **The
+confidence score is the only thing preventing a confidently wrong alignment**, so
+any deployment that ignores it will silently align unrelated audio.
 
-Separation AUC — the ability to tell matched from unrelated at all — is the
-governing number:
+**What a matched-data-only calibration would have shipped.** Setting the threshold
+from experiment A alone — keep 95% of genuine frames, the only thing you could do
+without a null — and then measuring it against unrelated audio:
 
-| frame | `aof` | `gcc_phat` |
+| frame | `aof` false-accept | `gcc_phat` false-accept |
 |---|---|---|
-| 50 ms | — | 0.592 |
-| 100 ms | 0.686 | 0.749 |
-| 250 ms | 0.959 | 0.929 |
-| 500 ms | 0.988 | 0.986 |
-| 2000 ms | 1.000 | 1.000 |
+| 50 ms | — | **90.6%** |
+| 100 ms | **81.9%** | **77.6%** |
+| 250 ms | **29.7%** | **41.1%** |
+| 500 ms | 0.4% | 5.4% |
+| 1000 ms | 0.0% | 0.2% |
+| 2000 ms | 0.0% | 0.0% |
 
-At 50 ms `gcc_phat` is near chance (0.592) and its null PSR reaches 52.4 against a
-required threshold of 48.3 — the matched and unrelated populations overlap almost
-entirely. Separation only becomes trustworthy at ≥250 ms, the same place accuracy
-does.
+At 250 ms — squarely inside the operating range this project cares about — a
+calibration built on genuine data alone would have accepted unrelated audio
+**30–41% of the time**, while looking perfectly healthy on every matched-data
+metric. That is the return on this experiment, and it is concentrated exactly
+where the system would run.
 
-**Not measured:** the naive false-alarm rate at an uncalibrated threshold. The 1%
-in summary.md §2 holds by construction. Section §4 of the metric set should be
-extended before anyone claims a false-alarm figure without running this
-calibration.
+Above 1000 ms the number collapses to zero: matched and null no longer overlap, so
+the calibration method stops mattering. **The null test is mandatory at 250–500 ms
+and redundant at ≥1000 ms.**
 
-### 4. Predictions: 1 confirmed, 2 refuted, 1 untested, 1 pending
+Separation AUC tells the same story from the other side: 0.592 (`gcc_phat`, 50 ms)
+is near chance; 0.93–0.96 at 250 ms; 1.000 at 2000 ms.
+
+**The naive 0.5 confidence threshold is not safe — it is over-strict.** It yields
+0.0–8.0% false accepts, but `aof`'s calibrated τ at FA ≤ 1% is 4.6–5.3, i.e. a
+squashed confidence of ~0.23–0.27. Shipping 0.5 would be roughly twice as strict
+as needed and would discard genuine frames wholesale. Its low false-accept rate is
+a side effect of rejecting nearly everything, not evidence that 0.5 is correct.
+
+### 4. Predictions: 1 confirmed, 3 refuted, 1 pending
 
 | # | Prediction | Outcome |
 |---|---|---|
 | 1 | `gcc_phat` knee at 200–500 ms, sharp fall below 100 ms | **confirmed** (26.9% → 55.3% → 84.6% raw hit) |
 | 2 | FA rises with reference length | **pending** — phase 2 |
 | 3 | `gcc_phat`'s PSR separates better than `aof`'s score | **refuted** — holds only at 100 ms; `aof` leads at 250 ms and they converge above |
-| 4 | Silence explains most short-frame failure | **refuted** — see below |
-| 5 | `aof` never reaches the 1 ms bar | **untested** — `TOL_MS` includes 1.0 but summary.md §1 prints only @20/@50 |
+| 4 | Silence explains most short-frame failure | **refuted** — 77% of failures are voiced |
+| 5 | `aof` never reaches the 1 ms bar | **refuted, but the reasoning was right** — see §5 |
 
 **On prediction 4:** at 50 ms `gcc_phat` misses 467 frames, and **358 of them
 (77%) are voiced**. Silent and low-energy frames fail near-totally but are only
@@ -221,40 +234,75 @@ silence artifact. The same holds for `aof` at 100 ms (80% of failures voiced).
 The stratification was still worth building — it is what allows this to be stated
 rather than assumed.
 
-### 5. Two findings nobody predicted
+### 5. Precision: `gcc_phat` is sample-exact, `aof` is quantised
+
+This **corrects an earlier reading of this run.** Before the `@1ms` column existed,
+`@20ms` and `@50ms` were identical everywhere and that was taken to mean neither
+method produces near-misses. With the strict bar added, the two methods separate
+completely:
+
+| frame | `gcc_phat` @20ms / @1ms | `aof` @20ms / @1ms |
+|---|---|---|
+| 250 ms | 84.6% / **84.6%** | 96.2% / **25.0%** |
+| 500 ms | 94.7% / **94.7%** | 99.1% / **25.1%** |
+| 1000 ms | 98.7% / **98.7%** | 99.7% / **27.6%** |
+| 2000 ms | 100.0% / **100.0%** | 100.0% / **26.4%** |
+
+**`gcc_phat` is sample-exact whenever it works at all** — @1ms, @20ms and @50ms
+are the same number at every frame length. It is binary: exact, or grossly wrong.
+This carries the bake-off's "sample-exact on crop" finding down to frame level.
+
+**`aof` is resolution-limited, not wrong.** Conditional on landing within 20 ms it
+lands within 1 ms about **26%** of the time, and that ratio is stable across
+250–2000 ms. For error uniform over a quantisation cell of width h,
+P(|err| ≤ 1 ms) = 2/h, so 26% implies **h ≈ 7.7 ms** (~123 samples at 16 kHz) —
+consistent with a fixed MFCC hop. Its 25% at the 1 ms bar is luck of landing near
+a grid point, not accuracy. *Inferred from the error distribution; not verified
+against the library's hop parameter.*
+
+Prediction 5 said `aof` would "never" reach 1 ms. Literally false — it reaches it
+a quarter of the time. The stated reason (MFCC-frame-rate limited) was correct.
+
+**Consequence for the recommendation:** the choice of method depends on the
+tolerance you actually need, and 42 ms is the number that matters here.
+
+### 6. Two findings nobody predicted
 
 **`gcc_phat`'s threshold drifts with frame length; `aof`'s does not.**
 τ for `gcc_phat`: 48.3 → 44.6 → 39.1 → 33.4 → 36.2 → 28.3.
 τ for `aof`: 5.31 → 4.69 → 4.87 → 4.61 → 5.05.
 
 This is the PSR comparability threat named above, appearing across *frame length*
-rather than reference length — §5 tests only the latter and had a single reference
-kind in phase 1. Operationally: `gcc_phat` requires a per-frame-length threshold
-table, `aof` may use a single global τ ≈ 5. A real deployment advantage for `aof`
-on top of its accuracy lead.
+rather than reference length — §6 of summary.md tests only the latter and had a
+single reference kind in phase 1. Operationally: `gcc_phat` requires a
+per-frame-length threshold table, `aof` may use a single global τ ≈ 5. A real
+deployment advantage for `aof` on top of its accuracy lead.
 
-**There are no near-misses.** Hit @ 20 ms and hit @ 50 ms are identical to within
-rounding at every length for both methods. These aligners either land well inside
-20 ms or miss grossly. **AWARE's 42 ms hop tolerance therefore buys nothing** —
-accuracy cannot be traded for reliability, because no population of marginal
-answers exists.
-
-### 6. `aof` has a minimum input length
-
-All 1,200 failed rows (8.33% of the run) are `aof` at 50 ms — 600 matched plus
-600 null. Confirmed by `aof`'s null n of 3,000 against `gcc_phat`'s 3,600. Every
-other cell is intact and the `methods.py` note format is unchanged, so
-summary.md §2 is reliable everywhere except the `aof`/50 ms cell, which correctly
-reports `-`.
-
-Record this as a **capability limit, not a defect to fix**: the method cannot
-accept a 50 ms buffer, which is information about the method.
+**`aof` has a minimum input length.** All 1,200 failed rows (8.33% of the run) are
+`aof` at 50 ms — 600 matched plus 600 null. Confirmed by `aof`'s null n of 3,000
+against `gcc_phat`'s 3,600. Every other cell is intact and the `methods.py` note
+format is unchanged, so summary.md §2 is reliable everywhere except the
+`aof`/50 ms cell, which correctly reports `-`. Record this as a **capability
+limit, not a defect to fix**.
 
 ### Recommendation
 
-For frame-level alignment, use **`aof` at ≥500 ms** frames with a single global
-threshold near 5. Below 250 ms, do not align frames at all — neither method is
-usable, and `gcc_phat`'s marginal lead there is a lead within an unusable regime.
+**For AWARE(20bps), use `aof` at ≥500 ms frames** with a single global threshold
+near 5. AWARE hops in 42 ms steps, so `aof`'s ~7.7 ms quantisation is five times
+finer than anything downstream can use, and at 20 ms tolerance it beats
+`gcc_phat` everywhere from 250 ms up (99.1% vs 94.7% at 500 ms).
+
+**If sample-grade sync is ever required, use `gcc_phat` and only `gcc_phat`.**
+`aof` caps at ~26% at the 1 ms bar regardless of frame length — more audio does
+not help, because the limit is a fixed grid. `gcc_phat` delivers 94.7% at 500 ms
+and 100% at 2000 ms with no precision penalty at all.
+
+Below 250 ms, do not align frames with either method. `gcc_phat`'s marginal lead
+there is a lead within an unusable regime.
+
+**Calibrate the threshold against a null.** At 250–500 ms a matched-data-only
+calibration ships a 30–41% false-accept rate (§3). Above 1000 ms it does not
+matter.
 
 This does **not** overturn `gcc_phat` for whole-clip alignment, where the bake-off
 evidence stands unchallenged. The two regimes have different winners.
@@ -264,12 +312,11 @@ evidence stands unchallenged. The two regimes have different winners.
 1. **Phase 2 unrun** — prediction 2 is unsettled. Re-time `frame_align.sbatch`
    first: phase 1 ran at 0.018–0.033 s/call, but 180 s references are ~20× the
    correlation length and null-partner references are rebuilt per partner.
-2. **Prediction 5 unresolved** — an `@1ms` column was added to `score_frames.py`
-   §1 after this conclusion was written. Re-run `score_frames.py` on the existing
-   `data/` to populate it; no cluster time needed.
-3. **Naive false-alarm rate** — `score_frames.py` §5 was added to report it
-   (accept-all, conf≥0.5, and the FA a matched-data-only calibration would have
-   shipped). Same re-run populates it.
+2. **`aof`'s quantisation step is inferred, not verified.** h ≈ 7.7 ms comes from
+   the error distribution. Confirm against the library's actual hop parameter —
+   if it disagrees, the mechanism in §5 is wrong even though the numbers stand.
+3. **`gcc_phat`'s short-frame collapse is unexplained.** The PHAT-whitening
+   hypothesis (§2) is untested; disabling whitening would settle it cheaply.
 4. **Clean audio only.** Whether these frame lengths survive attacks is phase 3,
    and belongs in its own results directory.
 5. **Speech only, ~10 s references.** Repetitive music, where several correlation
