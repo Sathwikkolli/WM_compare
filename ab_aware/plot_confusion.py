@@ -25,6 +25,24 @@ WHAT THE FOUR CELLS MEAN
 FP is the expensive error, and it is the one no earlier benchmark in this repo
 could measure, because they scored watermarked audio only.
 
+PESQ ON EVERY PANEL
+
+Each matrix carries the mean wideband PESQ of its watermarked arm, measured
+against the unwatermarked source. It is there so a failing matrix is never read
+without its audio quality: a condition that misses most positives AND scores
+poorly on PESQ has damaged the audio along with the watermark, while one that
+misses positives at HIGH PESQ is a genuine vulnerability -- good audio that
+evades detection. Those are opposite findings and the counts alone cannot tell
+them apart.
+
+Two cautions on reading it:
+  * PESQ is blank for time_stretch_1.1 and crop_50 -- both change length, so the
+    score would measure misalignment rather than damage.
+  * PESQ measures perceptual QUALITY, not intelligibility. Speech can score
+    poorly and remain perfectly usable to an adversary (high-pass filtering is
+    the classic case). Low PESQ is therefore suggestive, not proof, that an
+    attack is a non-threat -- STOI is what would settle it.
+
 WHICH NEGATIVES CALIBRATE THE THRESHOLD (this bit matters)
 
   default            ALL negatives, pooled over every condition -- what
@@ -113,6 +131,27 @@ def _cells(ax, tp, fn, fp, tn, big):
     return frac
 
 
+def cond_pesq(rows, cond=None):
+    """Mean PESQ over the wm arm, for one condition or pooled.
+
+    Returns None when there is nothing to average. That is expected, not an
+    error: run_ab.py leaves PESQ blank for time_stretch_1.1 and crop_50 because
+    both break sample alignment, so a number there would measure the
+    misalignment rather than the distortion.
+
+    Read per row: only the `clean` condition is watermark-only cost. Every
+    attacked condition mixes in the attack's own damage -- which is precisely
+    what makes it the right number to show beside a failing matrix.
+    """
+    vals = [r["pesq"] for r in usable(rows, cond=cond, arm="wm")
+            if r["pesq"] is not None]
+    return float(np.mean(vals)) if vals else None
+
+
+def fmt_pesq(p):
+    return "PESQ n/a (alignment)" if p is None else f"PESQ {p:.2f}"
+
+
 def rates(tp, fn, fp, tn):
     tpr = tp / max(tp + fn, 1)
     fpr = fp / max(fp + tn, 1)
@@ -141,7 +180,7 @@ def panel(ax, tp, fn, fp, tn, title, thresh, note=""):
             ha="center", va="top", fontsize=10.5)
 
 
-def mini(ax, tp, fn, fp, tn, title, highlight=False):
+def mini(ax, tp, fn, fp, tn, title, highlight=False, pesq=None):
     _cells(ax, tp, fn, fp, tn, big=False)
     ax.set_xticks([])
     ax.set_yticks([])
@@ -149,7 +188,11 @@ def mini(ax, tp, fn, fp, tn, title, highlight=False):
     ax.set_title(title, fontsize=11,
                  fontweight="bold" if highlight else "normal",
                  color="#c62828" if highlight else "#111", pad=6)
-    ax.set_xlabel(f"caught {tp}/{tp+fn}   false alarms {fp}/{fp+tn}",
+    # PESQ sits directly under the counts so quality is never read separately
+    # from the detection result -- a failing matrix and its audio quality belong
+    # in the same glance.
+    ax.set_xlabel(f"caught {tp}/{tp+fn}   false alarms {fp}/{fp+tn}\n"
+                  f"{fmt_pesq(pesq)}",
                   fontsize=9, labelpad=6)
 
 
@@ -157,22 +200,24 @@ def grid_figure(rows, thresh, thresh_label, out):
     """One mini matrix per condition + POOLED, all at the same threshold."""
     conds = [c for c in ORDER if usable(rows, cond=c, arm="wm")]
     panels = [(c, [r["conf"] for r in usable(rows, cond=c, arm="wm")],
-                  [r["conf"] for r in usable(rows, cond=c, arm="clean")])
+                  [r["conf"] for r in usable(rows, cond=c, arm="clean")],
+                  cond_pesq(rows, c))
               for c in conds]
     panels.append(("POOLED (all conditions)",
                    [r["conf"] for r in usable(rows, arm="wm")],
-                   [r["conf"] for r in usable(rows, arm="clean")]))
+                   [r["conf"] for r in usable(rows, arm="clean")],
+                   cond_pesq(rows)))
 
     ncol = 4
     nrow = int(np.ceil(len(panels) / ncol))
     fig, axes = plt.subplots(nrow, ncol, figsize=(3.3 * ncol, 3.5 * nrow),
                              squeeze=False)
-    for k, (name, pos, neg) in enumerate(panels):
+    for k, (name, pos, neg, pq) in enumerate(panels):
         ax = axes[k // ncol][k % ncol]
         tp, fn, fp, tn = confusion(pos, neg, thresh)
         # flag any condition that loses more than half the positives
         bad = (tp / max(tp + fn, 1)) < 0.5
-        mini(ax, tp, fn, fp, tn, name, highlight=bad)
+        mini(ax, tp, fn, fp, tn, name, highlight=bad, pesq=pq)
     for k in range(len(panels), nrow * ncol):
         axes[k // ncol][k % ncol].axis("off")
 
@@ -182,8 +227,14 @@ def grid_figure(rows, thresh, thresh_label, out):
     fig.text(0.5, 0.012,
              "Each panel:  top-left TP (caught)  |  top-right FN (missed)  |  "
              "bottom-left FP (false alarm)  |  bottom-right TN (correctly ignored).   "
-             "Red titles = more than half the watermarked clips missed.",
-             ha="center", fontsize=9.5, style="italic", color="#444")
+             "Red titles = more than half the watermarked clips missed.\n"
+             "PESQ is mean wideband PESQ of the watermarked arm vs. the "
+             "unwatermarked source (higher = better audio; roughly <2.0 = poor). "
+             "Read it next to a red panel: low PESQ means the attack also wrecked "
+             "the audio.\n"
+             "PESQ is unavailable for time_stretch_1.1 and crop_50 -- both change "
+             "length, so the score would measure misalignment, not damage.",
+             ha="center", fontsize=9, style="italic", color="#444")
     fig.tight_layout(rect=[0, 0.035, 1, 0.965])
     fig.savefig(out, dpi=160, bbox_inches="tight")
     plt.close(fig)
@@ -229,8 +280,10 @@ def main(argv):
           title="Calibrated threshold", thresh=t_cal, note=note)
 
     scope = f"condition: {cond}" if cond else "pooled over all 11 conditions"
+    pq = cond_pesq(rows, cond)
     fig.suptitle(f"AWARE detection -- confusion matrix  ({scope}, "
-                 f"n={len(pos)} watermarked / {len(neg)} unwatermarked)",
+                 f"n={len(pos)} watermarked / {len(neg)} unwatermarked, "
+                 f"{fmt_pesq(pq)})",
                  fontsize=13.5, y=1.0)
     fig.text(0.5, 0.015,
              "The bottom row of each matrix is the contribution of this "
@@ -248,6 +301,7 @@ def main(argv):
     print(f"  default    {DEFAULT_THRESH:.4f} -> TP/FN/FP/TN = "
           f"{confusion(pos, neg, DEFAULT_THRESH)}")
     print(f"  calibrated {t_cal:.4f} -> TP/FN/FP/TN = {confusion(pos, neg, t_cal)}")
+    print(f"  {fmt_pesq(pq)}")
 
 
 if __name__ == "__main__":
