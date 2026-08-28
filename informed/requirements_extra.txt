@@ -1,0 +1,34 @@
+# informed/ -- extra packages on top of the `wmcompare` env.
+#
+# SNAPSHOT FIRST, so this is reversible:
+#     conda activate wmcompare
+#     pip freeze > $HOME/wmcompare_freeze_before_informed.txt
+#     pip install --dry-run -r requirements_extra.txt      # see what pip would change
+#     pip install -r requirements_extra.txt
+#
+# Then confirm the watermark models still load:
+#     python -c "import sys; sys.path.insert(0,'../cascade'); import cascade_lib as cl; cl.get_adapter('aware'); print('aware ok')"
+#
+# Rollback:
+#     pip install -r $HOME/wmcompare_freeze_before_informed.txt
+
+# DNSMOS P.835, no-reference quality. THE REQUIRED BACKEND.
+#
+# Why this one specifically: cascade/emilia_bench.py:98 already filters source
+# clips with `df['dnsmos'] >= 3.0`. Using the same metric makes the usability
+# floor in this experiment THE SAME 3.0 the project already uses to choose
+# clips, rather than a number invented for this run.
+#
+# torchaudio SQUIM is implemented as a fallback in quality.py but is NOT
+# validated: on the two signals it could be tested against locally it scored
+# noisy audio HIGHER than clean (tones: 3.92 clean vs 3.95 noisy; 8 kHz speech:
+# 2.57 clean vs 3.98 noisy). Both inputs were out-of-distribution, so this does
+# not condemn SQUIM -- but it does mean it must pass `python quality.py` before
+# any run relies on it. The sbatch enforces that.
+speechmos>=0.1.0
+
+# pesq / pystoi are used by cascade_lib.quality_metrics(). Listed here because
+# they are optional in the base env (requirements-optional.txt) and the sweep
+# reports PESQ as its secondary metric.
+pesq>=0.0.4
+pystoi>=0.3.3
