@@ -77,10 +77,21 @@ def _resolve_backend():
     try:
         from speechmos import dnsmos  # noqa: F401
         _BACKEND = "speechmos"
-        _BACKEND_NOTE = "DNSMOS P.835 via speechmos -- comparable to the Emilia manifest"
+        _BACKEND_NOTE = "DNSMOS P.835 via speechmos"
         return _BACKEND
+    except ModuleNotFoundError as e:
+        # Name the missing module. `pip install speechmos` succeeding while the
+        # import still fails means one of ITS dependencies is absent (commonly
+        # onnxruntime), and "speechmos unavailable" would send you looking in
+        # the wrong place entirely.
+        missing = getattr(e, "name", None) or str(e)
+        hint = ("pip install onnxruntime" if missing and "onnx" in missing
+                else f"pip install {missing}")
+        first = (f"speechmos import failed: no module '{missing}' -- "
+                 f"speechmos itself may be installed but a dependency is not. "
+                 f"Try: {hint}")
     except Exception as e:
-        first = f"speechmos unavailable ({type(e).__name__})"
+        first = f"speechmos import failed ({type(e).__name__}: {e})"
 
     try:
         import torchaudio

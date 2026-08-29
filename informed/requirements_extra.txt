@@ -27,6 +27,12 @@
 # any run relies on it. The sbatch enforces that.
 speechmos>=0.0.1
 
+# speechmos ships the DNSMOS models as ONNX and needs a runtime to execute them.
+# It is NOT declared as a hard dependency by the package, so `pip install
+# speechmos` succeeds and `from speechmos import dnsmos` then fails with a
+# ModuleNotFoundError that does not mention speechmos at all.
+onnxruntime>=1.16
+
 # pesq / pystoi are used by cascade_lib.quality_metrics(). Listed here because
 # they are optional in the base env (requirements-optional.txt) and the sweep
 # reports PESQ as its secondary metric.
