@@ -86,7 +86,7 @@ MUSIC_SOURCES = {
 FIELDS = [
     "clip_id", "speaker", "clip_dur_s", "music", "snr_db", "arm",
     "conf", "bit_acc", "detected",
-    "dnsmos_ovrl", "dnsmos_sig", "dnsmos_bak", "nr_backend",
+    "dnsmos_ovrl", "dnsmos_sig", "dnsmos_bak", "dnsmos_clean", "nr_backend",
     "pesq", "stoi", "snr_db_measured", "si_snr_db",
     "dnsmos_source", "runtime_s", "note",
 ]
@@ -195,6 +195,13 @@ def run_clip(clip, musics, adapter, cl, writer, save_audio=False, verbose=True):
     org = org[:n_keep].astype("float32")
     ref_power = float(np.mean(org ** 2))
 
+    # This clip's own clean score. The usability floor is a DROP from this, not
+    # an absolute number -- clean Emilia clips measure 2.86-3.36, so an absolute
+    # floor would fail undamaged audio. See quality.py's constants block.
+    dnsmos_clean = Q.no_reference(org, cl.SR_MASTER)["ovrl"]
+    if verbose:
+        print(f"  clean DNSMOS = {dnsmos_clean}")
+
     t0 = time.time()
     wm = np.asarray(adapter.embed(org), dtype="float32")[:n_keep]
     if verbose:
@@ -249,6 +256,7 @@ def run_clip(clip, musics, adapter, cl, writer, save_audio=False, verbose=True):
                     "dnsmos_ovrl": q["dnsmos_ovrl"],
                     "dnsmos_sig": q["dnsmos_sig"],
                     "dnsmos_bak": q["dnsmos_bak"],
+                    "dnsmos_clean": dnsmos_clean,
                     "nr_backend": q["nr_backend"],
                     "pesq": q["pesq"],
                     "stoi": q["stoi"],

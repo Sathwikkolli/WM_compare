@@ -69,7 +69,7 @@ DETECT_THRESHOLD = 0.50                      # results/THRESHOLD_DECISION.md
 FIELDS = [
     "clip_id", "speaker", "attack", "category", "param", "arm",
     "conf", "bit_acc", "detected",
-    "dnsmos_ovrl", "dnsmos_sig", "dnsmos_bak", "nr_backend",
+    "dnsmos_ovrl", "dnsmos_sig", "dnsmos_bak", "dnsmos_clean", "nr_backend",
     "pesq", "stoi", "snr_db_measured", "si_snr_db",
     "alignment_breaking", "ok", "runtime_s", "note",
 ]
@@ -139,6 +139,12 @@ def run_clip(clip, attacks, adapter, cl, writer, verbose=True):
         return 0, 0
     org = org[:n_keep].astype("float32")
 
+    # This clip's own clean score -- the baseline the relative floor is measured
+    # against. See quality.py's constants block for why absolute floors fail here.
+    dnsmos_clean = Q.no_reference(org, cl.SR_MASTER)["ovrl"]
+    if verbose:
+        print(f"  clean DNSMOS = {dnsmos_clean}")
+
     t0 = time.time()
     wm = np.asarray(adapter.embed(org), dtype="float32")[:n_keep]
     if verbose:
@@ -169,6 +175,7 @@ def run_clip(clip, attacks, adapter, cl, writer, verbose=True):
                         "attack": name, "category": cat, "param": label,
                         "arm": arm, "conf": "", "bit_acc": "", "detected": "",
                         "dnsmos_ovrl": "", "dnsmos_sig": "", "dnsmos_bak": "",
+                        "dnsmos_clean": dnsmos_clean,
                         "nr_backend": "", "pesq": "", "stoi": "",
                         "snr_db_measured": "", "si_snr_db": "",
                         "alignment_breaking": breaks_align, "ok": 0,
@@ -197,7 +204,8 @@ def run_clip(clip, attacks, adapter, cl, writer, verbose=True):
                     "bit_acc": "" if not np.isfinite(bacc) else round(float(bacc), 4),
                     "detected": int(np.isfinite(conf) and conf >= DETECT_THRESHOLD),
                     "dnsmos_ovrl": q["dnsmos_ovrl"], "dnsmos_sig": q["dnsmos_sig"],
-                    "dnsmos_bak": q["dnsmos_bak"], "nr_backend": q["nr_backend"],
+                    "dnsmos_bak": q["dnsmos_bak"], "dnsmos_clean": dnsmos_clean,
+                    "nr_backend": q["nr_backend"],
                     "pesq": q["pesq"], "stoi": q["stoi"],
                     "snr_db_measured": q["snr_db"], "si_snr_db": q["si_snr_db"],
                     "alignment_breaking": breaks_align, "ok": 1,

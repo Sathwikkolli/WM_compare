@@ -6,8 +6,16 @@ data/screen_metrics.csv, and **selected_attacks.json** -- the Phase B input.
 
 THE CLASSIFICATION
 
-For each attack, walk its strengths from weakest to strongest and find s*, the
-strongest setting whose mean quality is still at or above the usability floor.
+For each attack, find s* -- among the settings whose audio is still USABLE,
+the one where detection confidence is lowest. Usable means quality has not
+fallen more than DROP_FLOOR below the clip's OWN clean score; an absolute
+floor does not work here, because clean Emilia clips measure 2.86-3.36 and an
+absolute 3.0 already fails a quarter of undamaged audio.
+
+Note s* is the setting that best defeats the DETECTOR, not the one that does
+the most damage. Those differ for volume, denoise and stereo widening, and the
+attacker optimises for the former.
+
 Then ask what detection is doing at s*:
 
   VULNERABLE     detection is already below threshold at s*.
@@ -33,7 +41,7 @@ cannot align.
 
 Usage:
     python score_screen.py
-    python score_screen.py --floor 3.5        # strict usability
+    python score_screen.py --drop 0.3         # strict usability
 """
 import csv
 import glob
@@ -54,7 +62,11 @@ RESULTS_DIR = os.path.join(BASE, "results", RUN_SLUG)
 DATA_DIR = os.path.join(RESULTS_DIR, "data")
 
 DETECT_THRESHOLD = 0.50
-DNSMOS_FLOOR = 3.0
+# RELATIVE floor: quality may fall this far below the clip's OWN clean
+# score before the audio counts as unusable. Absolute floors do not work on
+# this corpus -- clean Emilia clips measure 2.86-3.36, so an absolute 3.0
+# already fails a quarter of undamaged audio. See quality.py.
+DROP_FLOOR = 0.5
 BITACC_USEFUL = 0.85      # below this, informed detection has little to recover
 
 
@@ -78,7 +90,8 @@ def load():
     for fp in files:
         with open(fp, newline="") as f:
             for r in csv.DictReader(f):
-                for k in ("conf", "bit_acc", "dnsmos_ovrl", "pesq", "runtime_s"):
+                for k in ("conf", "bit_acc", "dnsmos_ovrl", "dnsmos_clean", "pesq",
+                          "runtime_s"):
                     r[k] = fnum(r.get(k))
                 r["ok"] = r.get("ok") == "1"
                 r["alignment_breaking"] = r.get("alignment_breaking") == "1"
@@ -97,7 +110,7 @@ def fmt(v, nd=2, dash="-"):
 
 
 def main(argv):
-    floor = get_arg(argv, "--floor", DNSMOS_FLOOR, float)
+    drop_floor = get_arg(argv, "--drop", DROP_FLOOR, float)
     rows = load()
 
     wm = [r for r in rows if r["arm"] == "wm"]
@@ -113,6 +126,7 @@ def main(argv):
         key = (r["attack"], r["param"])
         cfg[key].setdefault("conf", []).append(r["conf"])
         cfg[key].setdefault("dns", []).append(r["dnsmos_ovrl"])
+        cfg[key].setdefault("clean", []).append(r["dnsmos_clean"])
         cfg[key].setdefault("pesq", []).append(r["pesq"])
         cfg[key].setdefault("bacc", []).append(r["bit_acc"])
         cfg[key].setdefault("ok", []).append(r["ok"])
@@ -131,6 +145,8 @@ def main(argv):
                 "attack": atk, "param": p, "category": c.get("category", "?"),
                 "breaks_align": bool(c.get("breaks_align")),
                 "conf": mean(c["conf"]), "dnsmos": mean(c["dns"]),
+                "dnsmos_clean": mean(c["clean"]),
+                "drop": mean(c["clean"]) - mean(c["dns"]),
                 "pesq": mean(c["pesq"]), "bit_acc": mean(c["bacc"]),
                 "n_ok": sum(1 for v in c["ok"] if v), "n": len(c["ok"]),
             })
@@ -146,10 +162,13 @@ def main(argv):
                                "bit_acc_at_s_star": float("nan")})
             continue
 
-        usable = [r for r in runnable if r["dnsmos"] >= floor]
-        vulnerable = [r for r in runnable
-                      if r["dnsmos"] >= floor and np.isfinite(r["conf"])
-                      and r["conf"] < DETECT_THRESHOLD]
+        # usable = quality has not fallen more than drop_floor below this
+        # clip's own clean score. Note a NEGATIVE drop is legitimate:
+        # denoise can raise the score while stripping the watermark.
+        usable = [r for r in runnable
+                  if np.isfinite(r["drop"]) and r["drop"] <= drop_floor]
+        vulnerable = [r for r in usable
+                      if np.isfinite(r["conf"]) and r["conf"] < DETECT_THRESHOLD]
 
         if not usable:
             verdict, s = "SECURE", None      # every setting already wrecks audio
@@ -172,6 +191,7 @@ def main(argv):
             "s_star": s["param"] if s else "",
             "conf_at_s_star": s["conf"] if s else float("nan"),
             "dnsmos_at_s_star": s["dnsmos"] if s else float("nan"),
+            "drop_at_s_star": s["drop"] if s else float("nan"),
             "bit_acc_at_s_star": s["bit_acc"] if s else float("nan"),
         })
 
@@ -180,9 +200,10 @@ def main(argv):
     w("# Phase A — the 27-attack boundary screen\n")
     w(f"Run `{RUN_SLUG}`. {len(rows)} rows, {len(attacks)} attacks, "
       f"{len(clips)} clips. Detection threshold **{DETECT_THRESHOLD}**, "
-      f"usability floor **DNSMOS {floor}**.\n")
+      f"usability floor **drop <= {drop_floor} MOS** below each clip's own "
+      f"clean score.\n")
     w("Classification is documented at the top of `score_screen.py`. "
-      "`s*` is the strongest setting whose audio is still usable.\n")
+      "`s*` is the usable setting where detection is weakest.\n")
 
     # ---- headline ---------------------------------------------------------
     order_v = {"VULNERABLE": 0, "NO_FLOOR": 1, "SECURE": 2, "UNAVAILABLE": 3}
@@ -190,14 +211,15 @@ def main(argv):
                                    -r["n_vulnerable"], r["attack"]))
 
     w("\n## 1. Verdict per attack  <- THE SCREEN\n")
-    w("| attack | category | verdict | vulnerable configs | s* | conf @ s* | DNSMOS @ s* | bit acc @ s* |")
-    w("|---|---|---|---|---|---|---|---|")
+    w("| attack | category | verdict | vulnerable configs | s* | conf @ s* | DNSMOS @ s* | drop @ s* | bit acc @ s* |")
+    w("|---|---|---|---|---|---|---|---|---|")
     for r in per_attack:
         flag = " ⚠align" if r["breaks_align"] else ""
         nv = f"{r['n_vulnerable']}/{r.get('n_configs', 0)}"
         w(f"| `{r['attack']}`{flag} | {r['category']} | **{r['verdict']}** | {nv} "
           f"| {r['s_star']} | {fmt(r['conf_at_s_star'])} "
-          f"| {fmt(r['dnsmos_at_s_star'])} | {fmt(r['bit_acc_at_s_star'], 3)} |")
+          f"| {fmt(r['dnsmos_at_s_star'])} | {fmt(r.get('drop_at_s_star', float('nan')))} "
+          f"| {fmt(r['bit_acc_at_s_star'], 3)} |")
     w("\n⚠align = the bake-off found no aligner handles this attack, so Phase B "
       "cannot subtract an original even where the screen flags a weakness.")
 
@@ -293,7 +315,7 @@ def main(argv):
                 if r["verdict"] == "VULNERABLE" and not r["breaks_align"]]
     sel = {
         "run": RUN_SLUG,
-        "floor": floor,
+        "drop_floor": drop_floor,
         "detect_threshold": DETECT_THRESHOLD,
         "selected": [{"attack": r["attack"], "param": r["s_star"],
                       "category": r["category"],

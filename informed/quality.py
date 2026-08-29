@@ -56,8 +56,32 @@ sys.path.insert(0, os.path.join(ROOT, "cascade"))
 
 SR_16K = 16000
 
-# The usability floor. Same value as cascade/emilia_bench.py's DNSMOS_MIN, on
-# purpose -- see the docstring.
+# --------------------------------------------------------------------------- #
+#  THE USABILITY FLOOR IS RELATIVE, NOT ABSOLUTE
+# --------------------------------------------------------------------------- #
+# An absolute floor was tried first and does not work here. Measured on clean,
+# unattacked Emilia clips with this very scorer:
+#
+#     3.046  3.364  3.185  3.265  2.859  2.996  3.347  3.281
+#     median 3.22, min 2.86
+#
+# An absolute floor of 3.0 already fails a QUARTER of undamaged audio, so every
+# attack would be classified "destroys the audio" regardless of what it does.
+#
+# The original justification for 3.0 -- that it matched cascade/emilia_bench.py's
+# DNSMOS_MIN -- also turned out to be empty: the Emilia manifest's `dnsmos`
+# column runs 3.200 to 3.721 (min exactly 3.200, so it was pre-filtered when the
+# manifest was built), which means that filter removes nothing at all. And that
+# column is on a different scale from this scorer, so it cannot set our floor.
+#
+# So the floor is a DROP from each clip's own clean score. This is the better
+# definition anyway: an attacker degrades a file from wherever it already was,
+# not from some absolute ideal.
+DROP_FLOOR = 0.5          # MOS. Conventional "clearly worse" step on a 1-5 scale.
+DROP_FLOOR_STRICT = 0.3
+
+# Kept only so old absolute-floor numbers remain interpretable. Do not use these
+# to decide anything -- see above.
 DNSMOS_FLOOR = 3.0
 DNSMOS_FLOOR_STRICT = 3.5
 
@@ -305,16 +329,34 @@ def score(clean_path, deg_path, deg_audio=None, sr=None):
     return out
 
 
-def usable(row, strict=False):
-    """Is this audio still good enough for an attacker to want it?
+def drop(clean_score, degraded_score):
+    """How far quality fell from this clip's own clean score. nan if unknown.
 
-    None (scorer unavailable) returns None, not False -- 'unknown' and 'bad'
-    are different, and collapsing them would silently drop conditions.
+    Positive = worse. Negative is legitimate and interesting: `denoise` can
+    raise the score while stripping the watermark.
     """
-    v = row.get("dnsmos_ovrl")
-    if v is None:
+    if clean_score is None or degraded_score is None:
+        return float("nan")
+    try:
+        return float(clean_score) - float(degraded_score)
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def usable(clean_score, degraded_score, strict=False):
+    """Would an attacker still want this file?
+
+    Relative: usable while quality has not fallen more than DROP_FLOOR below
+    where THIS clip started. See the constants block for why absolute floors
+    fail on this corpus.
+
+    Returns None when either score is missing -- 'unknown' and 'unusable' are
+    different, and collapsing them would silently drop conditions from the screen.
+    """
+    d = drop(clean_score, degraded_score)
+    if not np.isfinite(d):
         return None
-    return bool(v >= (DNSMOS_FLOOR_STRICT if strict else DNSMOS_FLOOR))
+    return bool(d <= (DROP_FLOOR_STRICT if strict else DROP_FLOOR))
 
 
 # --------------------------------------------------------------------------- #

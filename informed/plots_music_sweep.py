@@ -5,9 +5,12 @@ Reads results/<run>/data/music_clip*.csv, writes results/<run>/figures/*.png.
 Nothing is hardcoded: change the data, the figures change.
 
   crossing.png              THE headline. Detection confidence and DNSMOS on one
-                            chart against SNR, with the 0.50 and 3.0 lines drawn
-                            in. The shaded band between where the two curves
-                            cross their thresholds IS the vulnerability window.
+                            chart against SNR, with the 0.50 detection line and
+                            the usability floor drawn in. The floor is RELATIVE
+                            (mean clean score minus DROP_FLOOR), because clean
+                            Emilia clips measure 2.86-3.36 and an absolute floor
+                            would already fail undamaged audio. The shaded band
+                            between the two crossings IS the vulnerability window.
   metric_disagreement.png   DNSMOS vs PESQ across the same sweep. Tests the
                             parent plan's claim that PESQ would wrongly condemn
                             a normal speech-over-music mix.
@@ -37,7 +40,10 @@ DATA_DIR = os.path.join(RESULTS_DIR, "data")
 FIG_DIR = os.path.join(RESULTS_DIR, "figures")
 
 DETECT_THRESHOLD = 0.50
-DNSMOS_FLOOR = 3.0
+# The usability floor is RELATIVE -- quality may fall this far below the
+# clip's own clean score. Clean Emilia clips measure 2.86-3.36, so an
+# absolute floor of 3.0 already fails undamaged audio. See quality.py.
+DROP_FLOOR = 0.5
 PESQ_FLOOR = 2.0
 
 C_DET = "#c2410c"      # detection
@@ -62,6 +68,14 @@ def load():
         with open(fp, newline="") as f:
             rows.extend(list(csv.DictReader(f)))
     return rows
+
+
+def clean_level(rows, music, arm="wm"):
+    """Mean clean score across clips -- the ceiling the floor hangs from."""
+    vals = [fnum(r.get("dnsmos_clean")) for r in rows
+            if r["music"] == music and r["arm"] == arm]
+    vals = [v for v in vals if np.isfinite(v)]
+    return float(np.mean(vals)) if vals else float("nan")
 
 
 def curve(rows, music, arm, field):
@@ -109,13 +123,20 @@ def fig_crossing(rows, music):
     ax2 = ax.twinx()
     ax2.plot(xs_q, dns, "s-", color=C_QUAL, lw=2, ms=5, label="DNSMOS (quality)")
     ax2.fill_between(xs_q, dns - dns_sd, dns + dns_sd, color=C_QUAL, alpha=0.13)
-    ax2.axhline(DNSMOS_FLOOR, color=C_QUAL, ls=":", lw=1.2)
+    clean = clean_level(rows, music)
+    floor = clean - DROP_FLOOR if np.isfinite(clean) else float("nan")
+    if np.isfinite(floor):
+        ax2.axhline(floor, color=C_QUAL, ls=":", lw=1.2)
+        ax2.annotate(f"usable floor {floor:.2f}\n"
+                     f"(clean {clean:.2f} − {DROP_FLOOR})",
+                     xy=(0.99, floor), xycoords=("axes fraction", "data"),
+                     ha="right", va="bottom", fontsize=7.5, color=C_QUAL)
     ax2.set_ylabel("DNSMOS overall (1-5)", color=C_QUAL)
     ax2.tick_params(axis="y", labelcolor=C_QUAL)
     ax2.set_ylim(1, 5)
 
     s_det = cross_x(xs_c, conf, DETECT_THRESHOLD)
-    s_qual = cross_x(xs_q, dns, DNSMOS_FLOOR)
+    s_qual = cross_x(xs_q, dns, floor)
 
     # The vulnerability window: usable audio, undetectable watermark.
     if np.isfinite(s_det):
@@ -160,13 +181,16 @@ def fig_metric_disagreement(rows, music):
 
     fig, ax = plt.subplots(figsize=(7.6, 4.6))
     ax.plot(xs_d, dns, "s-", color=C_QUAL, lw=2, ms=5,
-            label=f"DNSMOS (no-reference), floor {DNSMOS_FLOOR}")
-    ax.axhline(DNSMOS_FLOOR, color=C_QUAL, ls=":", lw=1.2)
+            label="DNSMOS (no-reference)")
+    clean = clean_level(rows, music)
+    floor = clean - DROP_FLOOR if np.isfinite(clean) else float("nan")
+    if np.isfinite(floor):
+        ax.axhline(floor, color=C_QUAL, ls=":", lw=1.2)
     ax.plot(xs_p, pesq, "^-", color=C_PESQ, lw=2, ms=5,
             label=f"PESQ (vs clean speech), floor {PESQ_FLOOR}")
     ax.axhline(PESQ_FLOOR, color=C_PESQ, ls=":", lw=1.2)
 
-    s_d = cross_x(xs_d, dns, DNSMOS_FLOOR)
+    s_d = cross_x(xs_d, dns, floor)
     s_p = cross_x(xs_p, pesq, PESQ_FLOOR)
     if np.isfinite(s_d) and np.isfinite(s_p) and s_p > s_d:
         ax.axvspan(s_d, s_p, color="#7c3aed", alpha=0.10, zorder=0)

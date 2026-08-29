@@ -136,10 +136,25 @@ PESQ and sounds completely normal; screening on PESQ would file it under
 "destroyed audio" alongside `highpass_0.2` and throw away the best candidate we
 have. So the primary metric is **DNSMOS**, no-reference.
 
-DNSMOS specifically, not any no-reference score: `cascade/emilia_bench.py:98`
-already filters source clips with `dnsmos >= 3.0`. Using the same metric makes
-the usability floor here **the same 3.0** the project already uses to choose
-clips, rather than a number invented for this run.
+**The floor is RELATIVE, and this was measured, not assumed.** The first design
+used an absolute DNSMOS 3.0, justified as matching `cascade/emilia_bench.py`'s
+`DNSMOS_MIN`. Both halves of that turned out to be wrong:
+
+- Measured on clean, unattacked Emilia clips with this scorer:
+  `3.046 3.364 3.185 3.265 2.859 2.996 3.347 3.281` — median **3.22**, min
+  **2.86**. An absolute 3.0 already fails **a quarter of undamaged audio**, so
+  every attack would be classified "destroys the audio" whatever it did.
+- The manifest's `dnsmos` column runs 3.200–3.721 with the minimum at exactly
+  3.200, i.e. it was pre-filtered when the manifest was built. So
+  `emilia_bench`'s `dnsmos >= 3.0` filter removes **nothing**, and there was no
+  precedent to inherit. That column is also on a different scale from this
+  scorer, so it cannot set our floor.
+
+So usable means **quality has not fallen more than 0.5 MOS below the clip's own
+clean score** (`DROP_FLOOR`, with 0.3 as the strict bar). This is the better
+definition regardless: an attacker degrades a file from wherever it already was.
+Both runners record `dnsmos_clean` per clip; `--drop` re-scores at a different
+bar without recomputing any audio.
 
 `quality.py` implements a torchaudio SQUIM fallback, and `music_sweep.py`
 **refuses to run on it** without `--force`. Two reasons: its scale is not

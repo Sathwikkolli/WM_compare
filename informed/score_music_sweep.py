@@ -10,7 +10,8 @@ Lowering SNR adds music: both detection confidence and quality fall. Two
 crossings matter, per clip:
 
     snr_det   the SNR where confidence falls through 0.50 -- the watermark dies
-    snr_qual  the SNR where DNSMOS falls through 3.0      -- the audio dies
+    snr_qual  the SNR where quality has dropped more than DROP_FLOOR below
+              this clip's OWN clean score -- the audio dies
 
     window = snr_det - snr_qual
 
@@ -27,7 +28,7 @@ results/2026-08-28_informed-detection/PHASE_A_PLAN.md.
 
 Usage:
     python score_music_sweep.py
-    python score_music_sweep.py --floor 3.5      # the strict usability floor
+    python score_music_sweep.py --drop 0.3      # the strict usability floor
 """
 import csv
 import glob
@@ -47,7 +48,9 @@ RESULTS_DIR = os.path.join(BASE, "results", RUN_SLUG)
 DATA_DIR = os.path.join(RESULTS_DIR, "data")
 
 DETECT_THRESHOLD = 0.50
-DNSMOS_FLOOR = 3.0
+# RELATIVE floor -- see quality.py. Clean Emilia clips measure 2.86-3.36,
+# so an absolute floor of 3.0 already fails undamaged audio.
+DROP_FLOOR = 0.5
 PESQ_FLOOR = 2.0          # the conventional "still acceptable" PESQ line
 
 
@@ -72,7 +75,8 @@ def load_rows():
         with open(fp, newline="") as f:
             for r in csv.DictReader(f):
                 for k in ("snr_db", "conf", "bit_acc", "dnsmos_ovrl", "dnsmos_sig",
-                          "dnsmos_bak", "pesq", "stoi", "si_snr_db", "runtime_s"):
+                          "dnsmos_bak", "dnsmos_clean", "pesq", "stoi",
+                          "si_snr_db", "runtime_s"):
                     r[k] = fnum(r.get(k))
                 r["detected"] = r.get("detected") == "1"
                 rows.append(r)
@@ -126,7 +130,7 @@ def fmt(v, nd=2, dash="-"):
 
 
 def main(argv):
-    floor = get_arg(argv, "--floor", DNSMOS_FLOOR, float)
+    drop_floor = get_arg(argv, "--drop", DROP_FLOOR, float)
     rows = load_rows()
 
     musics = sorted({r["music"] for r in rows})
@@ -146,11 +150,17 @@ def main(argv):
                 continue
             conf_pts = [(r["snr_db"], r["conf"]) for r in wm]
             dns_pts = [(r["snr_db"], r["dnsmos_ovrl"]) for r in wm]
+            # Headroom falls as SNR falls; it crosses 0 exactly where the
+            # drop from this clip's clean score exceeds the floor. Reusing
+            # crossing() this way keeps one interpolation routine.
+            head_pts = [(r["snr_db"],
+                         drop_floor - ((r["dnsmos_clean"] or float("nan"))
+                                       - r["dnsmos_ovrl"])) for r in wm]
             pesq_pts = [(r["snr_db"], r["pesq"]) for r in wm]
             bacc_pts = [(r["snr_db"], r["bit_acc"]) for r in wm]
 
             s_det = crossing(conf_pts, DETECT_THRESHOLD)
-            s_qual = crossing(dns_pts, floor)
+            s_qual = crossing(head_pts, 0.0)
             s_pesq = crossing(pesq_pts, PESQ_FLOOR)
 
             per.append({
@@ -175,7 +185,7 @@ def main(argv):
     w(f"Run `{RUN_SLUG}`. {len(rows)} rows, {len(clips)} clips, music "
       f"{', '.join(musics)}. Quality backend: {', '.join(backends)}.\n")
     w(f"Detection threshold **{DETECT_THRESHOLD}**, usability floor "
-      f"**DNSMOS {floor}**.\n")
+      f"**drop <= {drop_floor} MOS** below each clip's own clean score.\n")
     w("Metric definitions and the crossing computation are documented at the "
       "top of `score_music_sweep.py`. Read them before quoting anything here.\n")
 
@@ -228,7 +238,7 @@ def main(argv):
       "fidelity while an attacker only needs the audio to *sound* acceptable. "
       "This is that argument's empirical test. If they agree, the argument is "
       "wrong and the screen can use PESQ.\n")
-    w(f"| music | SNR where DNSMOS < {floor} | SNR where PESQ < {PESQ_FLOOR} | disagreement (dB) |")
+    w(f"| music | SNR where drop > {drop_floor} | SNR where PESQ < {PESQ_FLOOR} | disagreement (dB) |")
     w("|---|---|---|---|")
     for music in musics:
         sel = [p for p in per if p["music"] == music]

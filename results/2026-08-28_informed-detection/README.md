@@ -92,9 +92,14 @@ column in the Emilia manifest, so it costs nothing. PESQ is reported alongside
 for the attacks where fidelity genuinely is the point (noise, filtering,
 quantisation), and the disagreement between the two is itself recorded.
 
-**Usability floor: DNSMOS ≥ 3.0** (primary), with results also reported at
-**≥ 3.5** (strict). Detection threshold stays at **0.50** per
-`results/THRESHOLD_DECISION.md`.
+**Usability floor: a RELATIVE drop of ≤ 0.5 MOS** from each clip's own clean
+score (0.3 strict). An absolute floor was tried first and refuted by
+measurement: clean Emilia clips score 2.86–3.36 on this scorer (median 3.22),
+so an absolute 3.0 fails a quarter of *undamaged* audio. The original
+justification — matching `emilia_bench`'s `DNSMOS_MIN` — also fails: the
+manifest's `dnsmos` column is pre-filtered at 3.200, so that filter removes
+nothing, and it is on a different scale from this scorer. Detection threshold
+stays at **0.50** per `results/THRESHOLD_DECISION.md`.
 
 ---
 
