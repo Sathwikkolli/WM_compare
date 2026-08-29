@@ -25,7 +25,7 @@
 # 2.57 clean vs 3.98 noisy). Both inputs were out-of-distribution, so this does
 # not condemn SQUIM -- but it does mean it must pass `python quality.py` before
 # any run relies on it. The sbatch enforces that.
-speechmos>=0.1.0
+speechmos>=0.0.1
 
 # pesq / pystoi are used by cascade_lib.quality_metrics(). Listed here because
 # they are optional in the base env (requirements-optional.txt) and the sweep

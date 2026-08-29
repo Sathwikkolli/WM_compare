@@ -133,7 +133,7 @@ def _clean_speech(index=0, seconds=None):
     out-of-distribution and the output is meaningless -- the same objection we
     raise against feeding residuals to a neural detector. So anything that
     exercises a MOS backend uses real speech.
-    """
+
     Bandwidth matters as much as content. `audio/clean_set` is 8 kHz narrowband:
     upsampled to 16 kHz it has nothing above 4 kHz, and a MOS predictor scores
     that as poor -- measured, clean narrowband scored 2.57 while the same speech
