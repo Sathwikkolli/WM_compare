@@ -68,6 +68,33 @@ _BACKEND_NOTE = ""
 # --------------------------------------------------------------------------- #
 #  backend resolution
 # --------------------------------------------------------------------------- #
+def _quiet_onnxruntime():
+    """Silence onnxruntime's thread-affinity errors.
+
+    On a Slurm node the job is confined to a cpuset, onnxruntime tries to pin
+    each of its worker threads to a CPU outside that set, and every attempt logs
+    a line like:
+
+        [E:onnxruntime:Default, env.cc:226 ThreadMain] pthread_setaffinity_np
+        failed for thread: ..., error code: 22
+
+    It is harmless -- inference completes and the scores are correct -- but it is
+    ~50 lines PER SCORED FILE. At 118 configs x 2 arms x 50 clips that is roughly
+    half a million lines, which makes the array logs unreadable and hides real
+    failures.
+
+    speechmos builds its own InferenceSession, so there is no supported way to
+    pass it session options and cap the thread count, which would be the proper
+    fix. Raising the logger severity is the available one.
+    """
+    try:
+        import onnxruntime
+        # 4 = FATAL. 3 would still let these through: they are logged at E.
+        onnxruntime.set_default_logger_severity(4)
+    except Exception:
+        pass                                  # not fatal; you just get the noise
+
+
 def _resolve_backend():
     """Pick a no-reference scorer. Cached. Never raises."""
     global _BACKEND, _BACKEND_NOTE
@@ -76,6 +103,7 @@ def _resolve_backend():
 
     try:
         from speechmos import dnsmos  # noqa: F401
+        _quiet_onnxruntime()
         _BACKEND = "speechmos"
         _BACKEND_NOTE = "DNSMOS P.835 via speechmos"
         return _BACKEND
