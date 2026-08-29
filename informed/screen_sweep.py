@@ -122,7 +122,8 @@ def write_params(clips, attacks):
         "detect_threshold": DETECT_THRESHOLD,
         "quality_backend": backend,
         "quality_backend_note": backend_note,
-        "dnsmos_floor": Q.DNSMOS_FLOOR,
+        "drop_floor": Q.DROP_FLOOR,
+        "floor_is_relative": True,
         "python": platform.python_version(),
         "packages": versions,
     }

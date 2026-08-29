@@ -5,15 +5,12 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24g
-#SBATCH --time=01:30:00
-# TIMING -- estimated, not measured. Per clip: 1 AWARE embed (~seconds) plus
-# 14 SNRs x 2 arms = 28 mixes, each needing one AWARE detect, one DNSMOS score
-# and one PESQ. Detect and DNSMOS dominate. If a clip runs much longer than
-# ~15 min, cancel the array and re-time on one clip before resubmitting:
-#     time python music_sweep.py --clip 0
+#SBATCH --time=00:20:00
+# TIMING -- MEASURED, not estimated. One clip (embed + 14 SNRs x 2 arms, each
+# with an AWARE detect, a DNSMOS and a PESQ) took 44.5 s wall on a login node.
+# 20 min is ~27x headroom for a single-clip task; keeping it tight matters more
+# than the margin, because short jobs are scheduled far sooner than long ones.
 #
-# Memory is set for the DNSMOS model plus a 10 s clip at 22.05 kHz; 24 g is
-# generous. It is wall clock that needs watching.
 #SBATCH --array=0-49
 #SBATCH --output=musicsweep_%A_%a.log
 #SBATCH --account=hafiz1

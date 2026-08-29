@@ -23,19 +23,24 @@ So this module adds a NO-REFERENCE score and reports both.
 
 WHY DNSMOS SPECIFICALLY
 
-`cascade/emilia_bench.py:98` already filters source clips with
-`df['dnsmos'] >= 3.0`. Using the same metric makes our usability floor THE SAME
-3.0 the project already uses to choose clips -- a defensible number rather than
-an arbitrary one. A different scorer would need its own justification.
+It is a standard P.835 predictor of perceived quality, which is the quantity an
+attacker is constrained by. Note it is NOT the same thing as the Emilia
+manifest's `dnsmos` column -- see the floor block below, where that assumption
+was tested and refuted.
 
 BACKENDS, in preference order
 
-  speechmos     `pip install speechmos`. Bundles DNSMOS P.835; no manual model
-                download. Returns sig/bak/ovrl on the standard 1-5 MOS scale.
-  torchaudio    SQUIM_SUBJECTIVE. Already a dependency, but a DIFFERENT SCALE --
-                not comparable to the Emilia manifest. Fallback only, and the
-                backend used is recorded in every row so the two never get mixed
-                silently.
+  speechmos     `pip install speechmos` PLUS `pip install onnxruntime`. The
+                models ship as ONNX and onnxruntime is not declared as a hard
+                dependency, so the install succeeds and the import still fails.
+                Returns sig/bak/ovrl on the standard 1-5 MOS scale.
+  torchaudio    SQUIM_SUBJECTIVE. Present already, but UNUSABLE HERE and the
+                runners refuse it without --force. Measured on real wideband
+                speech: clean 2.958, noise +20 dB 3.753, noise -5 dB 4.514 --
+                the most damaged file scored highest. A backend that is not
+                monotone in damage cannot locate a crossing, which is the only
+                thing we need it for. The backend used is recorded in every row
+                so the two scales can never be pooled silently.
 
 If neither is available, `score()` returns None for the no-reference fields and
 says why. It never guesses.
@@ -413,8 +418,9 @@ def _selftest():
     # cannot be used to locate a crossing point.
     ok = all(a >= b - 1e-6 for a, b in zip(got, got[1:]))
     print(f"\n{'OK -- score falls monotonically as noise rises' if ok else 'FAIL -- score is not monotone in noise; this backend cannot locate a crossing'}")
-    print(f"usability floor: {DNSMOS_FLOOR} (matches emilia_bench DNSMOS_MIN), "
-          f"strict {DNSMOS_FLOOR_STRICT}")
+    print(f"usability floor: RELATIVE -- a drop of {DROP_FLOOR} MOS below a "
+          f"clip's own clean score (strict {DROP_FLOOR_STRICT}). "
+          f"Absolute floors fail here; see the constants block.")
     return ok
 
 
