@@ -89,20 +89,50 @@ def find_offset(org, attacked, sr, max_shift_s=MAX_SHIFT_S):
     return float(out["offset"]), psr
 
 
-def frac_shift(x, delta):
-    """Shift by a non-integer number of samples, via FFT phase rotation.
+def shift_signal(x, delta):
+    """Shift `x` by `delta` samples. Negative advances, positive delays.
 
-    Rounding the offset to the nearest sample leaves up to half a sample of
-    residual misalignment, and at 16 kHz that is enough host leakage to matter
-    once the watermark is 30-40 dB down.
+    SIGN, because getting it backwards is silent and fatal. gcc_phat's
+    convention is `offset = ref_index - dist_index`. If `attacked` is delayed
+    relative to `org`, content at org index k lands at attacked index k+d, so
+    offset = -d. To put `attacked` back on org's timebase we must ADVANCE it by
+    d, i.e. shift by -d = offset. So the caller passes `offset` unchanged --
+    negating it doubles the misalignment instead of removing it.
+
+    The integer part is done by slicing with zero fill, not by FFT rotation.
+    An FFT shift is CIRCULAR: it wraps the tail of the signal round to the
+    front, which for a real recording splices unrelated audio into the region
+    being correlated. Only the sub-sample remainder goes through the FFT, where
+    |frac| < 1 makes the wrap negligible.
+
+    The fractional part matters: rounding to the nearest sample leaves up to
+    half a sample of misalignment, and at 16 kHz that is enough host leakage to
+    swamp a watermark sitting 35 dB down.
     """
+    x = np.asarray(x, dtype="float32")
     if abs(delta) < 1e-9:
-        return np.asarray(x, dtype="float32")
+        return x
     n = len(x)
-    X = np.fft.rfft(x)
-    k = np.arange(X.shape[0])
-    X = X * np.exp(-2j * np.pi * k * delta / n)
-    return np.fft.irfft(X, n).astype("float32")
+    k_int = int(np.round(delta))
+    frac = float(delta - k_int)
+
+    if k_int > 0:                                   # delay
+        y = np.concatenate([np.zeros(k_int, dtype="float32"), x[:n - k_int]])
+    elif k_int < 0:                                 # advance
+        y = np.concatenate([x[-k_int:], np.zeros(-k_int, dtype="float32")])
+    else:
+        y = x.copy()
+
+    if abs(frac) > 1e-6:
+        Y = np.fft.rfft(y)
+        kk = np.arange(Y.shape[0])
+        Y = Y * np.exp(-2j * np.pi * kk * frac / n)
+        y = np.fft.irfft(Y, n)
+    return np.asarray(y, dtype="float32")
+
+
+# Kept so older callers do not break silently on a rename.
+frac_shift = shift_signal
 
 
 # --------------------------------------------------------------------------- #
@@ -250,7 +280,8 @@ def score(org, wm, attacked, sr=SR_16K, method="scalar", min_psr=None):
         return out
 
     # Shift `attacked` onto `org`'s timebase, fractional part included.
-    shifted = frac_shift(attacked, -offset) if abs(offset) > 1e-9 else attacked
+    # `offset`, NOT `-offset`: see shift_signal's docstring for the convention.
+    shifted = shift_signal(attacked, offset) if abs(offset) > 1e-9 else attacked
     m = min(len(shifted), n)
     if m < int(0.5 * sr):
         out["note"] = "overlap after alignment too short"
@@ -325,36 +356,61 @@ def _selftest():
         e *= np.sqrt(p / (np.mean(e ** 2) * 10 ** (snr_db / 10.0)))
         return (x + e).astype("float32")
 
-    ok = True
-    print(f"  {'case':34s} {'windowed':>9s} {'global':>8s} {'offset':>8s} {'gain':>7s}")
+    # Expectations come from theory, not from a number picked by hand.
+    #
+    # The residual is w + n, so correlating it against w gives
+    #     rho = |w| / sqrt(|w|^2 + |n|^2)
+    # which is fully determined by the watermark and noise powers. Checking
+    # against that validates the IMPLEMENTATION rather than asserting some
+    # arbitrary bar -- an earlier version of this test demanded rho > 0.30 and
+    # flagged a correct detector as broken, because at -35 dB watermark and
+    # +20 dB SNR the true answer is 0.175.
+    p_w = float(np.mean(w ** 2))
+    p_host = float(np.mean(org ** 2))
 
-    def run(label, attacked, method="scalar", expect=None):
+    def expected_rho(snr_db):
+        p_n = p_host / (10.0 ** (snr_db / 10.0))
+        return float(np.sqrt(p_w / (p_w + p_n)))
+
+    ok = True
+    print(f"  {'case':34s} {'windowed':>9s} {'expect':>8s} {'offset':>8s} "
+          f"{'gain':>7s}")
+
+    def run(label, attacked, method="scalar", expect=None, tol=0.45):
+        """expect: a number (theoretical rho), 'null', or None to just report."""
         nonlocal ok
         r = score(org, wm, attacked, sr, method=method)
-        good = True
-        if expect == "high":
-            good = r["ok"] and r["corr_windowed"] > 0.30
-        elif expect == "low":
-            good = r["ok"] and abs(r["corr_windowed"]) < 0.10
+        good, exp_s = True, ""
+        if expect == "null":
+            good = r["ok"] and abs(r["corr_windowed"]) < 0.05
+            exp_s = "~0"
+        elif isinstance(expect, float):
+            exp_s = f"{expect:.4f}"
+            good = (r["ok"] and np.isfinite(r["corr_windowed"])
+                    and abs(r["corr_windowed"] - expect) <= tol * expect)
         ok &= good
         mark = "" if good else "   <-- FAIL"
-        print(f"  {label:34s} {r['corr_windowed']:9.4f} {r['corr_global']:8.4f} "
+        print(f"  {label:34s} {r['corr_windowed']:9.4f} {exp_s:>8s} "
               f"{r['offset']:8.1f} {r['gain']:7.3f}{mark}")
         return r
 
-    # 1. present vs absent
-    run("watermarked, +20 dB noise", noisy(wm, 20), expect="high")
-    run("UNwatermarked, +20 dB noise", noisy(org, 20), expect="low")
-    run("watermarked, +5 dB noise", noisy(wm, 5), expect="high")
-    run("UNwatermarked, +5 dB noise", noisy(org, 5), expect="low")
+    # 1. present vs absent, against the predicted correlation
+    run("watermarked, +20 dB noise", noisy(wm, 20), expect=expected_rho(20))
+    run("UNwatermarked, +20 dB noise", noisy(org, 20), expect="null")
+    run("watermarked, +5 dB noise", noisy(wm, 5), expect=expected_rho(5))
+    run("UNwatermarked, +5 dB noise", noisy(org, 5), expect="null")
 
-    # 2. time shift -- the aligner's job
+    # 2. time shift -- the aligner's job. Must land on the SAME value as the
+    # unshifted case; if it does not, the offset is being applied wrongly, which
+    # is silent and fatal.
     shifted = np.concatenate([np.zeros(137, dtype="float32"), wm])[:n]
-    run("watermarked, shifted 137 samples", noisy(shifted, 20), expect="high")
+    run("watermarked, shifted 137 samples", noisy(shifted, 20),
+        expect=expected_rho(20))
 
-    # 3. gain change
+    # 3. gain change -- must also land on the same value, proving the scalar
+    # match removed it rather than the correlation merely tolerating it.
     run("watermarked, x0.4 gain", noisy((wm * 0.4).astype("float32"), 20),
-        expect="high")
+        expect=expected_rho(20))
 
     # 4. EQ-type change: scalar should struggle, FIR should not
     from scipy.signal import lfilter
