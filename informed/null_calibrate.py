@@ -77,6 +77,10 @@ FPR_SECONDARY = 0.05
 FIELDS = ["attack", "strength", "arm", "n", "fpr", "threshold",
           "null_p50", "null_p95", "null_max", "n_failed"]
 
+# Every individual null score. Lets thresholds be re-derived at any FPR
+# without re-running this stage, and feeds the score histograms.
+RAW_FIELDS = ["attack", "strength", "arm", "score"]
+
 
 def get_arg(argv, flag, default, cast=str):
     return cast(argv[argv.index(flag) + 1]) if flag in argv else default
@@ -170,7 +174,8 @@ def threshold_at(scores, fpr):
     return float(s[k])
 
 
-def calibrate_attack(attack, orgs, wcs, sr, adapter, writer, verbose=True):
+def calibrate_attack(attack, orgs, wcs, sr, adapter, writer, raw_writer=None,
+                     verbose=True):
     grid = SA.grid(attack, GRID_POINTS)
     if grid is None:
         print(f"{attack}: no strength axis -- skipped (control)")
@@ -204,6 +209,17 @@ def calibrate_attack(attack, orgs, wcs, sr, adapter, writer, verbose=True):
             r = ID.score(org, org + wcs[i], z, sr=sr, method="scalar")
             if r["ok"]:
                 informed.append(r["corr_windowed"])
+
+        # Dump the raw null scores, not just the summary. Two reasons:
+        # thresholds at any other FPR can then be re-derived WITHOUT re-running
+        # this stage, and the score histograms in Figure 3 need the actual
+        # distribution rather than percentiles.
+        if raw_writer is not None:
+            for arm, vals in (("blind", blind), ("informed", informed)):
+                for v in vals:
+                    if np.isfinite(v):
+                        raw_writer.writerow({"attack": attack, "strength": strength,
+                                             "arm": arm, "score": round(float(v), 6)})
 
         for arm, vals in (("blind", blind), ("informed", informed)):
             for fpr in (FPR_PRIMARY, FPR_SECONDARY):
