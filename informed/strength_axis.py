@@ -63,13 +63,20 @@ sys.path.insert(0, os.path.join(ROOT, "cascade"))
 # `cast`: applied to the native value ("int" where the attack needs one).
 AXIS = {
     # ---- additive: SNR in dB, already logarithmic --------------------------
-    "music_bed":        dict(lo=30.0,  hi=-20.0, scale="lin", unit="dB SNR"),
-    "gaussian_noise":   dict(lo=50.0,  hi=0.0,   scale="lin", unit="dB SNR"),
-    "noise_babble":     dict(lo=40.0,  hi=-5.0,  scale="lin", unit="dB SNR",
+    # WIDENED after the first Phase B run: informed detection survived the
+    # ENTIRE original range on every additive attack (49/50 clips censored
+    # for gaussian and the three noises). The axes had been drawn around
+    # where BLIND detection breaks, and informed operates far past that.
+    # These ends are deliberately absurd -- noise 30-35 dB LOUDER than the
+    # speech -- because the crossing has to be inside the bracket for a
+    # bisection result to mean anything.
+    "music_bed":        dict(lo=30.0, hi=-45.0, scale="lin", unit="dB SNR"),
+    "gaussian_noise":   dict(lo=50.0, hi=-30.0, scale="lin", unit="dB SNR"),
+    "noise_babble":     dict(lo=40.0, hi=-35.0, scale="lin", unit="dB SNR",
                              noise="babble.wav"),
-    "noise_factory":    dict(lo=40.0,  hi=-5.0,  scale="lin", unit="dB SNR",
+    "noise_factory":    dict(lo=40.0, hi=-35.0, scale="lin", unit="dB SNR",
                              noise="factory1.wav"),
-    "noise_machinegun": dict(lo=40.0,  hi=-5.0,  scale="lin", unit="dB SNR",
+    "noise_machinegun": dict(lo=40.0, hi=-35.0, scale="lin", unit="dB SNR",
                              noise="machinegun.wav"),
 
     # ---- codec: bitrate, log-spaced ----------------------------------------

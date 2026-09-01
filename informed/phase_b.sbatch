@@ -66,8 +66,13 @@ case "$STAGE" in
       python plots_phase_b.py || echo "  (plots failed or had no data)"
       RES="$WM_COMPARE_BASE/results/2026-08-28_informed-detection"
       echo ""
-      ls -la "$RES"/summary_phase_b.md "$RES"/data/phase_b_*.csv 2>/dev/null
-      ls -la "$RES"/figures/*phase_b* "$RES"/figures/gain_*.png 2>/dev/null
+      # `|| true` because a glob that matches nothing exits non-zero, and as
+      # the LAST command that marks the whole job FAILED even when scoring
+      # succeeded -- which is exactly what happened on the first run.
+      ls -la "$RES"/summary_phase_b.md "$RES"/data/phase_b_*.csv 2>/dev/null || true
+      ls -la "$RES"/figures/gain_*.png "$RES"/figures/null_*.png 2>/dev/null || true
+      echo "score stage complete"
+      exit 0
       ;;
 
   *)

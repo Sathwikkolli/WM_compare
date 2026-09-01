@@ -183,7 +183,6 @@ def calibrate_attack(attack, orgs, wcs, sr, adapter, writer, raw_writer=None,
 
     n_rows = 0
     for strength in grid:
-        param = SA.to_param(attack, strength)
         blind, informed = [], []
         n_failed = 0
         t0 = time.time()
@@ -191,7 +190,12 @@ def calibrate_attack(attack, orgs, wcs, sr, adapter, writer, raw_writer=None,
         for i in range(len(orgs)):
             org = orgs[i]
             # THE NULL: attack the UNWATERMARKED clip.
-            z = A.apply(attack, param, org, sr)
+            #
+            # Must go through SA.apply_at, not A.apply: the split attacks
+            # (volume_down / volume_up) are not names attacks_screen knows, so
+            # calling it directly silently returned None for both of them and
+            # they vanished from the whole experiment.
+            z = SA.apply_at(attack, strength, org, sr)
             if z is None:
                 n_failed += 1
                 continue
