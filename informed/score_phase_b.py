@@ -155,8 +155,17 @@ def main(argv):
     per_attack, per_pair = [], []
     for atk in attacks:
         gains_t, gains_native, blind_v, inf_v = [], [], [], []
+        # Every crossing found, regardless of whether the partner arm crossed.
+        # The old table blanked blind's number whenever informed was censored,
+        # which hid a perfectly good measurement behind a dash.
+        blind_all, inf_all = [], []
         status_count = defaultdict(int)
         censored_informed = 0
+        # "informed survived" only means informed WON if blind did not also
+        # survive. Counting them together made mp3 unreadable: 23 censored
+        # against 24 paired losses, with no way to tell which way it went.
+        inf_won_censored = 0      # informed survived, blind crossed
+        both_survived = 0         # neither crossed: the attack was too weak
 
         for cid in clips:
             pair = idx.get((atk, cid), {})
@@ -164,6 +173,15 @@ def main(argv):
             if not b or not i:
                 continue
             status_count[f"{b['status']}/{i['status']}"] += 1
+            if b["status"] == "CROSSED" and np.isfinite(b["value_cross"]):
+                blind_all.append(b["value_cross"])
+            if i["status"] == "CROSSED" and np.isfinite(i["value_cross"]):
+                inf_all.append(i["value_cross"])
+            if i["status"] == "NO_CROSSING_SURVIVED":
+                if b["status"] == "CROSSED":
+                    inf_won_censored += 1
+                elif b["status"] == "NO_CROSSING_SURVIVED":
+                    both_survived += 1
 
             # A survived-to-maximum informed arm is a LOWER BOUND on the gain,
             # not a data point. Counted, never averaged in.
@@ -198,8 +216,15 @@ def main(argv):
             "unit": SA.AXIS.get(atk, {}).get("unit", ""),
             "n_paired": n_paired, "n_clips": len(clips),
             "censored_informed": censored_informed,
-            "blind_median": stat(blind_v)["median"],
-            "informed_median": stat(inf_v)["median"],
+            "informed_won_censored": inf_won_censored,
+            "both_survived": both_survived,
+            # medians over ALL crossings, not only paired ones
+            "blind_median": stat(blind_all)["median"],
+            "informed_median": stat(inf_all)["median"],
+            "n_blind_crossed": len(blind_all), "n_informed_crossed": len(inf_all),
+            # Decisive wins = paired wins + clips where informed survived and
+            # blind did not. This is the number that answers "who won".
+            "decisive_wins": sum(1 for g in gains_t if g > 0) + inf_won_censored,
             "gain_t_mean": st["mean"], "gain_t_sd": st["sd"],
             "gain_native_mean": sn["mean"], "gain_native_sd": sn["sd"],
             "gain_native_median": sn["median"],
@@ -218,6 +243,38 @@ def main(argv):
       "quality is constant across the two arms by construction.\n")
     w("Metric definitions and status handling are at the top of "
       "`score_phase_b.py`. Read them before quoting anything here.\n")
+
+    # ---- who won ----------------------------------------------------------
+    w("\n## 0. Who won, per attack  <- READ THIS FIRST\n")
+    w("A clip is an **informed win** if informed crossed later than blind, OR if "
+      "informed never broke while blind did. A **blind win** is a paired clip "
+      "where blind crossed later.\n")
+    w("This table exists because a dash elsewhere means two opposite things: "
+      "informed winning so completely there was no crossing to pair with, or "
+      "nothing measured at all. Those must not look the same.\n")
+    w("| attack | informed wins | blind wins | both survived | no data | verdict |")
+    w("|---|---|---|---|---|---|")
+    for r in sorted(per_attack, key=lambda x: -(x.get("decisive_wins") or 0)):
+        n_paired = r["n_paired"]
+        wf = r["win_fraction"] if np.isfinite(r["win_fraction"]) else 0.0
+        paired_wins = int(round(wf * n_paired))
+        iw = r.get("decisive_wins", 0)
+        bw = n_paired - paired_wins                 # paired clips blind won
+        bs = r.get("both_survived", 0)
+        nd = max(0, r["n_clips"] - iw - bw - bs)
+
+        if iw + bw == 0:
+            verdict = "**no data**"
+        elif iw >= 2 * max(bw, 1):
+            verdict = "**INFORMED**"
+        elif bw >= 2 * max(iw, 1):
+            verdict = "**BLIND**"
+        else:
+            verdict = "mixed"
+        w(f"| `{r['attack']}` | {iw} | {bw} | {bs} | {nd} | {verdict} |")
+    w("\n`both survived` = neither detector broke anywhere on the axis, so the "
+      "attack never got strong enough to decide anything and the axis needs "
+      "widening. `no data` = the attack or its calibration failed.")
 
     # ---- headline ---------------------------------------------------------
     per_attack.sort(key=lambda r: (-(r["gain_t_mean"] if np.isfinite(r["gain_t_mean"])
@@ -276,12 +333,14 @@ def main(argv):
     w("\n## 4. Status accounting\n")
     w("A crossing that was never found is not a data point. These counts decide "
       "whether the means above are the headline or a footnote.\n")
-    w("| attack | paired & usable | informed survived the whole axis | other |")
-    w("|---|---|---|---|")
+    w("| attack | paired | informed survived, blind broke | both survived "
+      "| blind crossed (any) | informed crossed (any) |")
+    w("|---|---|---|---|---|---|")
     for r in per_attack:
-        other = r["n_clips"] - r["n_paired"] - r["censored_informed"]
-        w(f"| `{r['attack']}` | {r['n_paired']} | {r['censored_informed']} "
-          f"| {max(0, other)} |")
+        w(f"| `{r['attack']}` | {r['n_paired']} "
+          f"| **{r.get('informed_won_censored', 0)}** "
+          f"| {r.get('both_survived', 0)} "
+          f"| {r.get('n_blind_crossed', 0)} | {r.get('n_informed_crossed', 0)} |")
 
     total_pairs = sum(r["n_paired"] for r in per_attack)
     total_cens = sum(r["censored_informed"] for r in per_attack)
