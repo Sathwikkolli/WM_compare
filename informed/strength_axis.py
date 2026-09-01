@@ -83,26 +83,36 @@ AXIS = {
     "mp3":               dict(lo=128.0, hi=8.0,  scale="log", unit="kbps", cast="int"),
     "aac":               dict(lo=128.0, hi=8.0,  scale="log", unit="kbps", cast="int"),
     "opus":              dict(lo=128.0, hi=6.0,  scale="log", unit="kbps", cast="int"),
-    "platform_reencode": dict(lo=128.0, hi=16.0, scale="log", unit="kbps", cast="int"),
+    "platform_reencode": dict(lo=128.0, hi=8.0, scale="log", unit="kbps", cast="int"),
     "resample_roundtrip": dict(lo=16000.0, hi=2000.0, scale="log", unit="Hz",
                                cast="int"),
 
     # ---- filtering ---------------------------------------------------------
-    "highpass": dict(lo=0.02, hi=0.60, scale="lin", unit="cutoff ratio"),
-    "lowpass":  dict(lo=0.02, hi=0.60, scale="lin", unit="cutoff ratio"),
-    "smooth":   dict(lo=2.0,  hi=40.0, scale="lin", unit="window", cast="int"),
+    # hi capped at 0.50: vox_attacks' VOX_GRID tops out there, and asking for
+    # 0.60 made the attack return None at t=1. Every clip then failed the
+    # bracket check and highpass/lowpass produced NO data at all -- which
+    # looked like a result and was a bug.
+    #
+    # smooth widened: blind was still at 0.874 against a 0.20 threshold at
+    # window=40, i.e. NO_CROSSING_SURVIVED on all 50 clips.
+    "highpass": dict(lo=0.02, hi=0.50, scale="lin", unit="cutoff ratio"),
+    "lowpass":  dict(lo=0.02, hi=0.50, scale="lin", unit="cutoff ratio"),
+    "smooth":   dict(lo=2.0,  hi=120.0, scale="lin", unit="window", cast="int"),
 
     # ---- acoustic ----------------------------------------------------------
+    # stereo_widen widened: 11 clips had BOTH detectors survive at 60 ms.
+    # echo is left alone -- decay cannot exceed 1.0, so if AWARE survives
+    # 0.95 the honest answer is 'echo does not break it', not a wider axis.
     "reverb":       dict(lo=0.05, hi=2.50, scale="lin", unit="RT60 s"),
     "echo":         dict(lo=0.05, hi=0.95, scale="lin", unit="decay"),
-    "stereo_widen": dict(lo=1.0,  hi=60.0, scale="lin", unit="ms", cast="int"),
+    "stereo_widen": dict(lo=1.0,  hi=200.0, scale="lin", unit="ms", cast="int"),
 
     # ---- dynamics ----------------------------------------------------------
     "quantization": dict(lo=256.0, hi=2.0, scale="log", unit="levels", cast="int"),
-    "denoise":      dict(lo=1.0,   hi=60.0, scale="lin", unit="nr dB", cast="int"),
-    "dynamic_compression": dict(lo=1.5, hi=20.0, scale="lin", unit="ratio",
+    "denoise":      dict(lo=1.0,   hi=97.0, scale="lin", unit="nr dB", cast="int"),
+    "dynamic_compression": dict(lo=1.5, hi=60.0, scale="lin", unit="ratio",
                                 thresh=-25.0),
-    "dynamic_expansion":   dict(lo=1.5, hi=20.0, scale="lin", unit="ratio",
+    "dynamic_expansion":   dict(lo=1.5, hi=60.0, scale="lin", unit="ratio",
                                 thresh=-25.0),
 
     # ---- two-sided, split --------------------------------------------------
