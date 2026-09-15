@@ -54,7 +54,8 @@ import attacks_screen as A                     # noqa: E402
 import informed_detector as ID                 # noqa: E402
 import strength_axis as SA                     # noqa: E402
 
-RUN_SLUG = "2026-08-28_informed-detection"
+# Overridable so a re-run cannot overwrite the registered result.
+RUN_SLUG = os.environ.get("PHASEB_RUN", "2026-08-28_informed-detection")
 RESULTS_DIR = os.path.join(BASE, "results", RUN_SLUG)
 DATA_DIR = os.path.join(RESULTS_DIR, "data")
 NULL_DIR = os.path.join(DATA_DIR, "null")
@@ -183,7 +184,10 @@ def calibrate_attack(attack, orgs, wcs, sr, adapter, writer, raw_writer=None,
 
     n_rows = 0
     for strength in grid:
-        blind, informed = [], []
+        # informed16 = the corrected statistic (informed_detector.score_16k).
+        # Calibrated on the same attacked files so both informed arms share one
+        # null, and the registered arm is unchanged.
+        blind, informed, informed16 = [], [], []
         n_failed = 0
         t0 = time.time()
 
@@ -210,22 +214,28 @@ def calibrate_attack(attack, orgs, wcs, sr, adapter, writer, raw_writer=None,
             # Informed: correlate this clip's residual against the watermark it
             # WOULD have carried. There is no watermark, so any high score is a
             # false alarm.
-            r = ID.score(org, org + wcs[i], z, sr=sr, method="scalar")
+            wm = org + wcs[i]
+            r = ID.score(org, wm, z, sr=sr, method="scalar")
             if r["ok"]:
                 informed.append(r["corr_windowed"])
+            r16 = ID.score_16k(org, wm, z, sr, method="scalar")
+            if r16["ok"]:
+                informed16.append(r16["corr_global"])
+
+        arms = (("blind", blind), ("informed", informed), ("informed16", informed16))
 
         # Dump the raw null scores, not just the summary. Two reasons:
         # thresholds at any other FPR can then be re-derived WITHOUT re-running
-        # this stage, and the score histograms in Figure 3 need the actual
+        # this stage, and the score histograms in Figure 5 need the actual
         # distribution rather than percentiles.
         if raw_writer is not None:
-            for arm, vals in (("blind", blind), ("informed", informed)):
+            for arm, vals in arms:
                 for v in vals:
                     if np.isfinite(v):
                         raw_writer.writerow({"attack": attack, "strength": strength,
                                              "arm": arm, "score": round(float(v), 6)})
 
-        for arm, vals in (("blind", blind), ("informed", informed)):
+        for arm, vals in arms:
             for fpr in (FPR_PRIMARY, FPR_SECONDARY):
                 v = [x for x in vals if np.isfinite(x)]
                 writer.writerow({
@@ -242,9 +252,11 @@ def calibrate_attack(attack, orgs, wcs, sr, adapter, writer, raw_writer=None,
         if verbose:
             bt = threshold_at(blind, FPR_PRIMARY)
             it = threshold_at(informed, FPR_PRIMARY)
+            i16 = threshold_at(informed16, FPR_PRIMARY)
             print(f"  {SA.label(attack, strength):>14s}  "
                   f"blind thr={bt:7.4f} (n={len(blind):3d})  "
                   f"informed thr={it:7.4f} (n={len(informed):3d})  "
+                  f"informed16 thr={i16:7.4f} (n={len(informed16):3d})  "
                   f"{time.time()-t0:5.0f}s")
     return n_rows
 
@@ -256,7 +268,11 @@ def main(argv):
     orgs, wcs, sr = load_cache()
     print(f"null cache: {len(orgs)} clips at {sr} Hz")
 
-    attacks = sorted(a for a in A.SCREEN_GRID if SA.grid(a, 2) is not None)
+    # From the strength axes, NOT attacks_screen.SCREEN_GRID. The screen grid
+    # names `volume`, while the axes split it into volume_down / volume_up, so
+    # filtering screen names by "has an axis" silently dropped both: the first
+    # run calibrated 20 attacks and the array's last two tasks did nothing.
+    attacks = sorted(SA.AXIS)
     task = os.environ.get("SLURM_ARRAY_TASK_ID")
     if "--attack" in argv:
         chosen = [get_arg(argv, "--attack", "")]
@@ -276,13 +292,18 @@ def main(argv):
     os.makedirs(NULL_DIR, exist_ok=True)
     for attack in chosen:
         out_csv = os.path.join(NULL_DIR, f"null_{attack}.csv")
+        raw_csv = os.path.join(NULL_DIR, f"nullraw_{attack}.csv")
         print(f"\n{attack}  ({GRID_POINTS} strengths x {len(orgs)} null clips)")
         t0 = time.time()
-        with open(out_csv, "w", newline="") as f:
+        # raw_writer used to be accepted but never passed, so nullraw_*.csv was
+        # never written and the null-separation figure could not be drawn.
+        with open(out_csv, "w", newline="") as f, open(raw_csv, "w", newline="") as fr:
             w = csv.DictWriter(f, fieldnames=FIELDS)
             w.writeheader()
-            n = calibrate_attack(attack, orgs, wcs, sr, adapter, w)
-        print(f"  {n} rows, {time.time()-t0:.0f}s -> {out_csv}")
+            wr = csv.DictWriter(fr, fieldnames=RAW_FIELDS)
+            wr.writeheader()
+            n = calibrate_attack(attack, orgs, wcs, sr, adapter, w, raw_writer=wr)
+        print(f"  {n} rows, {time.time()-t0:.0f}s -> {out_csv} (+ {os.path.basename(raw_csv)})")
 
 
 if __name__ == "__main__":

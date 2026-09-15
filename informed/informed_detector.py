@@ -33,6 +33,14 @@ dilutes a locally-surviving watermark. Windowed is more sensitive and will very
 likely score higher -- which is exactly why the choice is registered in advance.
 `score()` returns BOTH, so the effect of the choice stays visible.
 
+CORRECTION, AFTER THE FIRST RUN (2026-09-15)
+
+At 22.05 kHz the reference `wm - org` contains the voice above 8 kHz, and the
+windowed mean over-weights near-silent residual windows. Together they put the
+clean-audio threshold at ~0.5 on filters, where it should be ~0. `score_16k()`
+removes both. It is reported NEXT TO the registered `score()`, never instead of
+it. Evidence: results/2026-09-11_aware-lowpass-null.
+
     python informed_detector.py        # self-test on synthetic audio
 """
 from __future__ import annotations
@@ -315,6 +323,44 @@ def score(org, wm, attacked, sr=SR_16K, method="scalar", min_psr=None):
     return out
 
 
+def score_16k(org, wm, attacked, sr, method="scalar", min_psr=None):
+    """CORRECTED informed score: run at AWARE's 16 kHz, read the whole clip.
+
+    Two defects in `score()` at 22.05 kHz, both measured in
+    results/2026-09-11_aware-lowpass-null on 200 clean clips:
+
+    1. The reference is not the watermark. AWARE embeds at 16 kHz and the file
+       is resampled back, so `wm` holds nothing above 8 kHz while `org` does.
+       `wm - org` is then (watermark) MINUS (the voice above 8 kHz): median 1.2%
+       of its energy, but up to 62% on some clips -- and those clips set the 1%
+       threshold. Any attack that removes highs (lowpass, codecs) leaves a
+       residual made of that same voice, so clean audio correlates up to ~0.8.
+       At 16 kHz both sides are band-limited identically and the reference is
+       the watermark.
+    2. The windowed mean gates windows on the REFERENCE's energy, so a window
+       where the residual is almost nothing still casts a full [-1, 1] vote.
+       The whole-clip correlation weights each part by its energy.
+
+    Neither fix alone was enough; together, at lowpass 0.45 the clean 1%
+    threshold fell from 0.474 to 0.048 and detection went 78% -> 100%.
+
+    The registered primary (`score()`, corr_windowed at 22 kHz) is kept
+    unchanged and reported alongside -- this is a post-hoc correction and is
+    labelled as one. The returned dict is `score()`'s; read `corr_global`.
+    """
+    if sr != SR_16K:
+        import librosa        # same resampler as cascade_lib.resample
+
+        def rs(x):
+            return librosa.resample(np.asarray(x, dtype="float32"),
+                                    orig_sr=sr, target_sr=SR_16K).astype("float32")
+        org, wm, attacked = rs(org), rs(wm), rs(attacked)
+    r = score(org, wm, attacked, sr=SR_16K, method=method, min_psr=min_psr)
+    # ok follows the statistic actually used, not the windowed one
+    r["ok"] = bool(np.isfinite(r["corr_global"]))
+    return r
+
+
 # --------------------------------------------------------------------------- #
 #  self-test
 # --------------------------------------------------------------------------- #
@@ -425,6 +471,22 @@ def _selftest():
         if not better:
             print("  NOTE: not a hard failure, but the FIR variant exists for "
                   "exactly this case -- worth understanding before relying on it.")
+
+    # 5. the corrected score (whole clip at 16 kHz). Input here is already
+    # 16 kHz, so this checks the statistic, not the resampling.
+    for label, attacked, expect in (
+            ("watermarked, +20 dB noise", noisy(wm, 20), expected_rho(20)),
+            ("UNwatermarked, +20 dB noise", noisy(org, 20), None)):
+        r16 = score_16k(org, wm, attacked, sr)
+        if expect is None:
+            good = r16["ok"] and abs(r16["corr_global"]) < 0.05
+            exp_s = "~0"
+        else:
+            good = r16["ok"] and abs(r16["corr_global"] - expect) <= 0.45 * expect
+            exp_s = f"{expect:.4f}"
+        ok &= good
+        print(f"  score_16k {label:24s} {r16['corr_global']:9.4f} {exp_s:>8s}"
+              f"{'' if good else '   <-- FAIL'}")
 
     print("\n" + ("SELF-TEST PASSED" if ok else
                   "SELF-TEST FAILED -- do not run Phase B until this passes"))

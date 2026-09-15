@@ -66,7 +66,8 @@ import attacks_screen as A                     # noqa: E402
 import informed_detector as ID                 # noqa: E402
 import strength_axis as SA                     # noqa: E402
 
-RUN_SLUG = "2026-08-28_informed-detection"
+# Overridable so a re-run cannot overwrite the registered result.
+RUN_SLUG = os.environ.get("PHASEB_RUN", "2026-08-28_informed-detection")
 RESULTS_DIR = os.path.join(BASE, "results", RUN_SLUG)
 DATA_DIR = os.path.join(RESULTS_DIR, "data")
 NULL_DIR = os.path.join(DATA_DIR, "null")
@@ -83,11 +84,21 @@ CURVE_POINTS = 15          # --curve mode only, for the gain-curve figure
 CURVE_FIELDS = ["clip_id", "attack", "unit", "arm", "t", "value",
                 "score", "threshold", "margin"]
 
+# blind       AWARE's own detector
+# informed    REGISTERED: windowed correlation at 22.05 kHz
+# informed16  CORRECTED, post-hoc: whole-clip correlation at 16 kHz
+ARMS = ("blind", "informed", "informed16")
+ARM_TAG = {"blind": "b", "informed": "i", "informed16": "i16"}
+
+# Interior strengths checked before bisecting, to catch a detector that fails
+# and then recovers. 0.2 spacing: highpass's blind dip spans t ~0.27-0.58.
+PROBE_TS = (0.2, 0.4, 0.6, 0.8)
+
 FIELDS = [
     "clip_id", "speaker", "attack", "unit", "arm", "fpr",
     "status", "t_cross", "value_cross",
     "score_at_t0", "thr_at_t0", "score_at_t1", "thr_at_t1",
-    "n_evals", "message", "runtime_s", "note",
+    "probe_signs", "n_evals", "message", "runtime_s", "note",
 ]
 
 
@@ -163,8 +174,15 @@ def blind_score(adapter, attacked):
 
 
 def informed_score(org, wm, attacked, sr):
+    """REGISTERED primary: windowed correlation at 22.05 kHz."""
     r = ID.score(org, wm, attacked, sr=sr, method="scalar")
     return r["corr_windowed"] if r["ok"] else float("nan")
+
+
+def informed16_score(org, wm, attacked, sr):
+    """CORRECTED, post-hoc: whole-clip correlation at 16 kHz (see score_16k)."""
+    r = ID.score_16k(org, wm, attacked, sr, method="scalar")
+    return r["corr_global"] if r["ok"] else float("nan")
 
 
 def evaluate(attack, t, org, wm, adapter, sr, arm):
@@ -176,6 +194,8 @@ def evaluate(attack, t, org, wm, adapter, sr, arm):
     z = np.asarray(z, dtype="float32")
     if arm == "blind":
         return blind_score(adapter, z)
+    if arm == "informed16":
+        return informed16_score(org, wm, z, sr)
     return informed_score(org, wm, z, sr)
 
 
@@ -186,7 +206,9 @@ def find_crossing(attack, arm, org, wm, adapter, sr, curves, n_iter=N_BISECT):
     """Where does `arm` stop clearing its FPR-matched threshold?
 
     Returns a dict. `status` is one of CROSSED / NO_CROSSING_SURVIVED /
-    NO_CROSSING_FAILED / UNAVAILABLE, and only CROSSED carries a usable number.
+    NO_CROSSING_FAILED / NON_MONOTONE / UNAVAILABLE, and only CROSSED carries a
+    usable number. `probe_signs` records the margin sign at t = 0, the probes,
+    and 1 (e.g. "++--" ... ), so every status can be audited from the CSV.
     """
     def margin(t):
         s = evaluate(attack, t, org, wm, adapter, sr, arm)
@@ -201,11 +223,32 @@ def find_crossing(attack, arm, org, wm, adapter, sr, curves, n_iter=N_BISECT):
     n_evals += 2
 
     base = {"score_at_t0": s0, "thr_at_t0": thr0,
-            "score_at_t1": s1, "thr_at_t1": thr1, "n_evals": n_evals}
+            "score_at_t1": s1, "thr_at_t1": thr1, "n_evals": n_evals,
+            "probe_signs": ""}
 
     if not np.isfinite(g0) or not np.isfinite(g1):
         return dict(base, status="UNAVAILABLE", t_cross=float("nan"),
                     note="attack unavailable or threshold missing")
+
+    # MONOTONICITY PROBE. Bisection is only meaningful if detection gets worse
+    # as the attack gets stronger. Checking the two ends cannot see a dip in
+    # the middle: blind AWARE under highpass fails around cutoff 0.15-0.3 and
+    # RECOVERS at 0.45, so the ends read "survived" while most of the axis
+    # fails. Any -> + transition along the probes is reported, not bisected.
+    probes = []
+    for tp in PROBE_TS:
+        g, _s, _t = margin(tp)
+        probes.append(g)
+    n_evals += len(PROBE_TS)
+    seq = [g0] + probes + [g1]
+    signs = "".join("+" if np.isfinite(g) and g > 0 else
+                    "-" if np.isfinite(g) else "?" for g in seq)
+    base.update(n_evals=n_evals, probe_signs=signs)
+    fin = [g for g in seq if np.isfinite(g)]
+    if any(fin[k] <= 0 < fin[k + 1] for k in range(len(fin) - 1)):
+        return dict(base, status="NON_MONOTONE", t_cross=float("nan"),
+                    note=f"detection recovers as the attack strengthens ({signs})")
+
     if g0 <= 0:
         # Already failing at the weakest setting. Not a crossing at t=0 -- the
         # axis does not start weak enough, and reporting 0 would be a fiction.
@@ -216,8 +259,21 @@ def find_crossing(attack, arm, org, wm, adapter, sr, curves, n_iter=N_BISECT):
         return dict(base, status="NO_CROSSING_SURVIVED", t_cross=float("nan"),
                     note="detector still above threshold at t=1")
 
+    # Start the bracket from the probes already evaluated: last passing probe
+    # to first failing one. Monotone, so everything before the first failure
+    # passed.
     lo, hi = 0.0, 1.0                    # g(lo) > 0, g(hi) <= 0
-    for _ in range(n_iter):
+    for tp, g in zip(PROBE_TS, probes):
+        if not np.isfinite(g):
+            continue
+        if g > 0:
+            lo = tp
+        else:
+            hi = tp
+            break
+    # The probe bracket is <= 0.2 wide, so n_iter-2 halvings still reach
+    # 0.2/256 < 1/1024, the original resolution.
+    for _ in range(max(1, n_iter - 2)):
         mid = 0.5 * (lo + hi)
         g, _s, _t = margin(mid)
         n_evals += 1
@@ -262,7 +318,7 @@ def run_curve(ci, clip, attacks, adapter, cl, curves, writer, verbose=True):
     for attack in attacks:
         unit = SA.AXIS[attack].get("unit", "")
         for tt in np.linspace(0.0, 1.0, CURVE_POINTS):
-            for arm in ("blind", "informed"):
+            for arm in ARMS:
                 old = adapter.truth
                 try:
                     adapter.truth = bits
@@ -299,8 +355,12 @@ def write_params(clips, attacks, fpr):
         "attacks": attacks, "n_bisect": N_BISECT, "fpr": fpr,
         "message_bits": MESSAGE_BITS,
         "message": "random per clip, seeded by clip index",
+        "arms": list(ARMS),
         "informed_statistic": "windowed normalised correlation, 42 ms / 50% "
-                              "overlap, mean (registered primary)",
+                              "overlap, mean, 22.05 kHz (registered primary)",
+        "informed16_statistic": "whole-clip normalised correlation at 16 kHz "
+                                "(post-hoc correction, informed_detector.score_16k)",
+        "monotonicity_probes": list(PROBE_TS),
         "host_removal": "scalar gain (registered primary); FIR is secondary",
         "aligner": "gcc_phat, sub-sample, from align_bench/methods.py",
         "excluded": SA.NO_AXIS,
@@ -340,7 +400,7 @@ def run_clip(ci, clip, attacks, adapter, cl, curves, writer, fpr, verbose=True):
     for attack in attacks:
         unit = SA.AXIS[attack].get("unit", "")
         line = f"    {attack:22s}"
-        for arm in ("blind", "informed"):
+        for arm in ARMS:
             t1 = time.time()
             # The adapter must carry this clip's message for blind detection to
             # score bit accuracy against the right truth.
@@ -363,11 +423,12 @@ def run_clip(ci, clip, attacks, adapter, cl, curves, writer, fpr, verbose=True):
                 "thr_at_t0": round(r["thr_at_t0"], 6) if np.isfinite(r["thr_at_t0"]) else "",
                 "score_at_t1": round(r["score_at_t1"], 6) if np.isfinite(r["score_at_t1"]) else "",
                 "thr_at_t1": round(r["thr_at_t1"], 6) if np.isfinite(r["thr_at_t1"]) else "",
+                "probe_signs": r.get("probe_signs", ""),
                 "n_evals": r["n_evals"], "message": bits,
                 "runtime_s": round(time.time() - t1, 2), "note": r["note"],
             })
             n_rows += 1
-            line += (f"  {arm[0]}:{r['status'][:4]}"
+            line += (f"  {ARM_TAG[arm]}:{r['status'][:4]}"
                      f"{('=' + format(v, '.3g')) if np.isfinite(v) else ''}")
         if verbose:
             print(line)
@@ -401,7 +462,8 @@ def main(argv):
     import cascade_lib as cl
     print("loading AWARE adapter...")
     adapter = cl.get_adapter("aware")
-    print(f"{len(attacks)} attacks x 2 arms x ~{N_BISECT + 2} evals per clip\n")
+    print(f"{len(attacks)} attacks x {len(ARMS)} arms x "
+          f"~{N_BISECT + len(PROBE_TS)} evals per clip\n")
 
     os.makedirs(SWEEP_DIR, exist_ok=True)
     write_params(clips, attacks, fpr)

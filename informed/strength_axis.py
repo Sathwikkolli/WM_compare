@@ -95,8 +95,19 @@ AXIS = {
     #
     # smooth widened: blind was still at 0.874 against a 0.20 threshold at
     # window=40, i.e. NO_CROSSING_SURVIVED on all 50 clips.
+    #
+    # LOWPASS RUNS THE OTHER WAY. The cutoff is where content is deleted ABOVE,
+    # so a LOW cutoff is the STRONG end. It used to copy highpass (lo=0.02),
+    # which made t=0 "keep only < 441 Hz" -- a hum that AWARE scores 0.87 on
+    # clean audio (results/2026-09-11_aware-lowpass-null) -- and every clip
+    # failed the bracket check. lo=0.45 not 0.50: 0.50 is Nyquist, a no-op.
+    #
+    # HIGHPASS IS NOT MONOTONE for blind detection: AWARE fails around 0.15-0.3
+    # and recovers at 0.45, where filter leakage leaves a -80 dB copy of the
+    # watermark it reads perfectly (same run). bisect_sweep probes interior
+    # points and reports NON_MONOTONE rather than a crossing.
     "highpass": dict(lo=0.02, hi=0.50, scale="lin", unit="cutoff ratio"),
-    "lowpass":  dict(lo=0.02, hi=0.50, scale="lin", unit="cutoff ratio"),
+    "lowpass":  dict(lo=0.45, hi=0.02, scale="lin", unit="cutoff ratio"),
     "smooth":   dict(lo=2.0,  hi=120.0, scale="lin", unit="window", cast="int"),
 
     # ---- acoustic ----------------------------------------------------------
