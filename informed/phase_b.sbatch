@@ -40,8 +40,13 @@ case "$STAGE" in
       python null_calibrate.py --prep
       ;;
 
+  # ATTACKS (optional, comma-separated) restricts every stage to those attacks.
   nullcal)
-      python null_calibrate.py
+      if [ -n "${ATTACKS:-}" ]; then
+          for A in ${ATTACKS//,/ }; do python null_calibrate.py --attack "$A" || exit 1; done
+      else
+          python null_calibrate.py
+      fi
       ;;
 
   sweep)
@@ -49,11 +54,11 @@ case "$STAGE" in
           echo "ERROR: no null calibration in $RES. Run STAGE=nullcal first." >&2
           exit 1
       fi
-      python bisect_sweep.py
+      python bisect_sweep.py ${ATTACKS:+--attacks "$ATTACKS"}
       ;;
 
   curve)
-      python bisect_sweep.py --clip 0 --attacks music_bed,lowpass,highpass --curve
+      python bisect_sweep.py --clip 0 --attacks "${ATTACKS:-music_bed,lowpass,highpass}" --curve
       ;;
 
   score)

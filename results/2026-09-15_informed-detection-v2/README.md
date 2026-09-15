@@ -4,8 +4,14 @@
 filled in until the run completes.
 
 The registered first run lives in `results/2026-08-28_informed-detection` and is
-**not overwritten**. This directory is a re-run of the same experiment with the
-errors below fixed. Both are reported.
+**not overwritten**. This directory is a re-run with the errors below fixed.
+Both are reported.
+
+**Scope: `lowpass` only.** All nine fixes are in the code, but only lowpass is
+re-run here — it is the attack the investigation was about. The other 21
+attacks keep their run-1 results, which are still affected by errors 2–7 (and
+`volume_down`/`volume_up` remain unmeasured). A full re-run is
+`bash submit_phase_b.sh --from nullcal` with no `--attacks`.
 
 ## Why a re-run
 
@@ -37,23 +43,22 @@ data. It found two errors, and reading the pipeline afterwards found seven more.
 
 ```
 cd ~/wm_compare/informed
-bash submit_phase_b.sh --from nullcal     # null cache in real_audio/ is reused
+bash submit_phase_b.sh --from nullcal --attacks lowpass   # null cache in real_audio/ is reused
 ```
 
 Outputs:
 
 - `summary_phase_b.md`, `figures/*.png` — blind vs registered informed
 - `summary_phase_b_informed16.md`, `figures/*_informed16.png` — blind vs corrected informed
-- `data/null/null_*.csv`, `data/null/nullraw_*.csv`, `data/sweep/sweep_clip*.csv`
+- `data/null/null_lowpass.csv`, `data/null/nullraw_lowpass.csv`, `data/sweep/sweep_clip*.csv`
 
 ## What to check first
 
-1. **No `no data`** in section 0 of either summary. Any is a pipeline failure.
-2. `volume_down` and `volume_up` appear (22 attacks, not 20).
-3. `lowpass` has crossings for blind (expected ~1.5–2.2 kHz, i.e. cutoff 0.07–0.10).
-4. `highpass` shows `NON_MONOTONE` for blind on most clips.
-5. Additive attacks: does the ~20 dB informed gain from run 1 hold under both informed arms?
-6. `mp3`, `opus`, `aac`: does informed16 remove the informed loss seen in run 1?
+1. **No `no data`** for lowpass in section 0 of either summary.
+2. Blind crosses around cutoff 0.07–0.10 (~1.5–2.2 kHz), as the null probe found.
+3. Registered informed vs `informed16`: the probe predicts `informed16` outlasts
+   blind (58% vs 28% detected at 1.5 kHz) while the registered arm does not.
+4. Few or no `NON_MONOTONE` rows — lowpass was monotone in the probe.
 
 ## Results
 
