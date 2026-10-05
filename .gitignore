@@ -50,3 +50,8 @@ dereverb_wpe*.png
 client_demucs/
 client_music_removal.csv
 client_correlation_all.csv
+
+# deepfake_probe: detector code/weights + generated wavs (re-made on the cluster)
+deepfake_probe/third_party/
+deepfake_probe/work/
+deepfake_probe/*.log
