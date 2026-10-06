@@ -23,6 +23,7 @@ from that run; audioseal_only / timbre_only are embedded here (fast).
 
     python spectrograms.py                       # first 2 clips of the latest probe run
     python spectrograms.py --n-clips 6
+    python spectrograms.py --n-clips 1 --variants all_three   # stacked: all 3 in one file
 """
 import os, sys, glob, argparse, datetime
 import numpy as np
@@ -36,7 +37,9 @@ cl = P.cl
 SR = P.SR
 
 TOOLS = ('audioseal', 'aware', 'timbre')
-NAME = {'audioseal': 'AudioSeal', 'aware': 'AWARE', 'timbre': 'Timbre'}
+STACKED = 'all_three'            # AudioSeal -> AWARE -> Timbre, from run_probe.py
+NAME = {'audioseal': 'AudioSeal', 'aware': 'AWARE', 'timbre': 'Timbre',
+        STACKED: 'All three (AudioSeal -> AWARE -> Timbre)'}
 # CQT: C1 (32.7 Hz) upward, 24 bins/octave, stop below Nyquist so the top filters fit
 FMIN, BPO, HOP = 32.70, 24, 256
 N_BINS = int(BPO * np.log2(7600 / FMIN))
@@ -48,28 +51,32 @@ N_FFT = 1024                      # STFT used for the band statistics only
 # --------------------------------------------------------------------------- #
 #  audio
 # --------------------------------------------------------------------------- #
-def solo_wavs(clip_id, work):
-    """-> {tool: (reference_wav, watermarked_wav)}; embeds whatever is missing."""
+def wav_pairs(clip_id, work, variants):
+    """-> {variant: (reference_wav, watermarked_wav)}; embeds whatever is missing.
+    variants: any of TOOLS (embedded alone) and/or STACKED."""
     d = os.path.join(work, clip_id)
     clean_p = os.path.join(d, 'clean.wav')
     if not os.path.exists(clean_p):
         sys.exit(f'{clean_p} missing -- run run_probe.py first')
     clean = cl.read_wav(clean_p, SR)
+    # Timbre's step is 16k -> 22.05k -> 16k; anything containing Timbre gets a
+    # reference with the same round trip, so the diff holds only the watermark,
+    # not resampling error.
+    rt_p = os.path.join(d, 'clean_rt22k.wav')
+    if not os.path.exists(rt_p):
+        rt = cl.resample(cl.resample(clean, SR, cl.SR_MASTER), cl.SR_MASTER, SR)
+        cl.write_wav(rt_p, rt[:len(clean)], SR)
     out = {}
-    for tool in TOOLS:
-        wm_p = os.path.join(d, f'{tool}_only.wav')
+    for v in variants:
+        chain = P.VARIANTS[STACKED] if v == STACKED else (v,)
+        wm_p = os.path.join(d, f'{v}.wav' if v == STACKED else f'{v}_only.wav')
         if not os.path.exists(wm_p):
-            cl.write_wav(wm_p, P.embed16(tool, clean.copy()), SR)
-            print(f'  [{clip_id}] embedded {tool}_only', flush=True)
-        ref_p = clean_p
-        if tool == 'timbre':
-            # Timbre's step is 16k -> 22.05k -> 16k; give its reference the same round
-            # trip so the diff holds only the watermark, not resampling error.
-            ref_p = os.path.join(d, 'clean_rt22k.wav')
-            if not os.path.exists(ref_p):
-                rt = cl.resample(cl.resample(clean, SR, cl.SR_MASTER), cl.SR_MASTER, SR)
-                cl.write_wav(ref_p, rt[:len(clean)], SR)
-        out[tool] = (ref_p, wm_p)
+            z = clean.copy()
+            for tool in chain:
+                z = P.embed16(tool, z)
+            cl.write_wav(wm_p, z, SR)
+            print(f'  [{clip_id}] embedded {os.path.basename(wm_p)}', flush=True)
+        out[v] = (rt_p if 'timbre' in chain else clean_p, wm_p)
     return out
 
 
@@ -205,10 +212,12 @@ def write_summary(out, df, clips):
             'pause_frames_pct', 'wm_speech_minus_pause_db', 'wm_to_speech_db_in_pauses']
     md = [
         '# Where each watermark is embedded -- summary\n',
-        f'Clips: {", ".join(clips)} (Emilia, 10 s, 16 kHz). Each watermark embedded alone. '
+        f'Clips: {", ".join(clips)} (Emilia, 10 s, 16 kHz). Each solo watermark embedded '
+        f'alone; `{STACKED}` = AudioSeal -> AWARE -> Timbre stacked in one file, so its diff '
+        'is the combined watermark. '
         f'Numbers are means over the {len(clips)} clips; per-clip values are in '
         '`data/watermark_stats.csv`. Images: `figures/<clip>/<watermark>/`.\n',
-        'Timbre runs at 22.05 kHz, so its original/diff use a clean reference that went '
+        'Timbre runs at 22.05 kHz, so it (and the stacked file) use a clean reference that went '
         'through the same 16k -> 22.05k -> 16k round trip; its diff is the watermark only.\n',
         '## Share of watermark energy by band (%)\n', f(t_where), '',
         '## Watermark loudness vs speech, by band (dB)\n', f(t_loud), '',
@@ -233,10 +242,18 @@ def main():
                     help='run_probe.py results dir (default: latest *_deepfake-probe-emilia16k)')
     ap.add_argument('--work', default=os.path.join(HERE, 'work', 'emilia16k'))
     ap.add_argument('--n-clips', type=int, default=2)
-    ap.add_argument('--out', default=os.path.join(
-        REPO, 'results', f'{datetime.date.today():%Y-%m-%d}_watermark-spectrograms'))
+    ap.add_argument('--variants', default=','.join(TOOLS),
+                    help=f'comma list of {",".join(TOOLS + (STACKED,))}; '
+                         f'{STACKED} = all three stacked in one file')
+    ap.add_argument('--out', default=None)
     a = ap.parse_args()
 
+    variants = [v.strip() for v in a.variants.split(',') if v.strip()]
+    bad = set(variants) - set(TOOLS + (STACKED,))
+    if bad:
+        sys.exit(f'unknown --variants {sorted(bad)}')
+    slug = 'watermark-spectrograms' + ('-stacked' if variants == [STACKED] else '')
+    a.out = a.out or os.path.join(REPO, 'results', f'{datetime.date.today():%Y-%m-%d}_{slug}')
     probe = a.probe_results or latest_probe()
     clips = pd.read_csv(os.path.join(probe, 'data', 'clips.csv'))['clip_id'].head(a.n_clips).tolist()
     data = os.path.join(a.out, 'data')
@@ -247,7 +264,7 @@ def main():
 
     rows = []
     for clip_id in clips:
-        for tool, (ref_p, wm_p) in solo_wavs(clip_id, a.work).items():
+        for tool, (ref_p, wm_p) in wav_pairs(clip_id, a.work, variants).items():
             x, y = load_pair(ref_p, wm_p)
             make_images(x, y, os.path.join(a.out, 'figures', clip_id, tool), clip_id, tool)
             rows.append(dict(clip=clip_id, watermark=tool, **stats(x, y)))
