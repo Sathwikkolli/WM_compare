@@ -29,6 +29,22 @@ def windows(y, win=WIN):
     return [y[i * win:(i + 1) * win] for i in range(len(y) // win)]
 
 
+def _import_file(path, name):
+    """Import one .py file under a unique module name.
+
+    Plain `from model import ...` resolves through sys.modules / sys.path, and by the
+    time detectors load, the Timbre adapter has already imported ITS `model`
+    package -- so RawNet2's model.py was shadowed. Loading by path sidesteps that.
+    Both files imported this way (AASIST.py, RawNet2 model.py) only import torch/numpy.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def _strip_module(sd):
     """Checkpoints saved from nn.DataParallel prefix every key with 'module.'."""
     return {k[7:] if k.startswith('module.') else k: v for k, v in sd.items()}
@@ -59,15 +75,12 @@ class AASIST(_Base):
     def load(self):
         torch = self.torch
         repo = os.path.join(TP, 'aasist')
-        sys.path.insert(0, repo)
-        from models.AASIST import Model
+        Model = _import_file(os.path.join(repo, 'models', 'AASIST.py'), 'aasist_model').Model
         conf = json.load(open(os.path.join(repo, 'config', 'AASIST.conf')))
         m = Model(conf['model_config']).to(self.dev)
         sd = torch.load(os.path.join(repo, 'models', 'weights', 'AASIST.pth'),
                         map_location=self.dev)
         m.load_state_dict(_strip_module(sd)); m.eval()
-        sys.path.remove(repo)
-        sys.modules.pop('models', None)          # don't shadow other 'models' pkgs
         self.model = m
         return self
     def _probs(self, x):
@@ -80,8 +93,7 @@ class RawNet2(_Base):
     def load(self):
         torch, yaml = self.torch, __import__('yaml')
         d = os.path.join(TP, 'rawnet2')
-        sys.path.insert(0, d)
-        from model import RawNet
+        RawNet = _import_file(os.path.join(d, 'model.py'), 'rawnet2_model').RawNet
         cfg = yaml.safe_load(open(os.path.join(d, 'model_config_RawNet.yaml')))
         m = RawNet(cfg['model'], self.dev).to(self.dev)
         pth = sorted(glob.glob(os.path.join(d, '**', '*.pth'), recursive=True))
@@ -89,8 +101,6 @@ class RawNet2(_Base):
             raise FileNotFoundError(f'no RawNet2 .pth under {d} -- run setup_detectors.sh')
         m.load_state_dict(_strip_module(torch.load(pth[0], map_location=self.dev)))
         m.eval()
-        sys.path.remove(d)
-        sys.modules.pop('model', None)
         self.model, self.weights = m, os.path.relpath(pth[0], HERE)
         return self
     def _probs(self, x):
@@ -125,6 +135,12 @@ def load_all(device=None):
 
 if __name__ == '__main__':
     # Smoke test: white noise and silence should run without error; prints P(spoof).
+    # Pre-occupy the generic module names the way run_probe.py's watermark adapters
+    # do (Timbre imports a `model` package), so a name collision fails HERE, not
+    # after 15 minutes of embedding.
+    import types
+    for n in ('model', 'models'):
+        sys.modules.setdefault(n, types.ModuleType(n))
     rng = np.random.default_rng(0)
     for det in load_all():
         for tag, y in (('noise', 0.05 * rng.standard_normal(16000 * 6)),
