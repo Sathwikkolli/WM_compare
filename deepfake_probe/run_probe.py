@@ -60,6 +60,43 @@ def pick_emilia(csv_path):
     return sel
 
 
+# ASVspoof2019 LA eval -- the detectors' own in-domain test set (paths as used in
+# Narrow-Frequency-Range-Clone/eval/run_suite.sbatch). Already 16 kHz FLAC.
+ASV_AUDIO = os.environ.get(
+    'ASV_AUDIO', '/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/'
+                 'ASVspoof2019_LA_eval/flac')
+ASV_PROTOCOL = os.environ.get(
+    'ASV_PROTOCOL', os.path.expanduser('~/asvspoof_protocols/ASVspoof2019.LA.cm.eval.trl.txt'))
+
+
+def pick_asvspoof(protocol, audio_dir, n):
+    """n bona fide eval clips, one per speaker, each >= one detector window long
+    (most LA clips are shorter and would be tile-padded). Deterministic for SEED."""
+    import soundfile as sf
+    cols = ['speaker', 'utt', 'system', 'attack', 'label']
+    df = pd.read_csv(protocol, sep=r'\s+', header=None, names=cols)
+    df = df[df['label'] == 'bonafide'].sample(frac=1.0, random_state=SEED)
+    picked, seen = [], set()
+    for r in df.itertuples():
+        if r.speaker in seen:
+            continue
+        p = os.path.join(audio_dir, f'{r.utt}.flac')
+        if not os.path.exists(p):
+            continue
+        dur = sf.info(p).duration
+        if dur * SR < D.WIN:
+            continue
+        picked.append(dict(speaker=r.speaker, utt=r.utt, path=p, duration_s=round(dur, 2)))
+        seen.add(r.speaker)
+        if len(picked) == n:
+            break
+    if len(picked) < n:
+        sys.exit(f'only {len(picked)} bona fide clips >= {D.WIN / SR:.2f} s found in {audio_dir}')
+    sel = pd.DataFrame(picked)
+    sel.insert(0, 'clip_id', [f'asv_{i:02d}' for i in range(len(sel))])
+    return sel
+
+
 # ---- 16 kHz embed / detect ------------------------------------------------- #
 # cascade_lib's adapters take 22.05 kHz input and resample internally. Here the
 # signal is already 16 kHz, so AudioSeal/AWARE are called at their native rate
@@ -102,9 +139,11 @@ def detect16(tool, y):
     return a.detect(cl.resample(y, SR, cl.SR_MASTER))
 
 
-def build_variants(clip_id, src, work, reuse):
+def build_variants(clip_id, src, work, reuse, seconds=None):
     d = os.path.join(work, clip_id)
-    y = cl.read_wav(src, SR)[:int(SECONDS * SR)]
+    y = cl.read_wav(src, SR)
+    if seconds:
+        y = y[:int(seconds * SR)]
     paths = {}
     for var, chain in VARIANTS.items():
         p = os.path.join(d, f'{var}.wav')
@@ -121,23 +160,47 @@ def build_variants(clip_id, src, work, reuse):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--source', choices=['emilia', 'asvspoof'], default='emilia')
+    ap.add_argument('--n-clips', type=int, default=None,
+                    help=f'default {N_CLIPS} for emilia, 2 for asvspoof')
     ap.add_argument('--emilia-csv', default=EMILIA_CSV)
-    ap.add_argument('--work', default=os.path.join(HERE, 'work', 'emilia16k'))
-    ap.add_argument('--out',  default=os.path.join(
-        REPO, 'results', f'{datetime.date.today():%Y-%m-%d}_deepfake-probe-emilia16k'))
+    ap.add_argument('--asv-audio', default=ASV_AUDIO)
+    ap.add_argument('--asv-protocol', default=ASV_PROTOCOL)
+    ap.add_argument('--work', default=None)
+    ap.add_argument('--out',  default=None)
     ap.add_argument('--reuse-wavs', action='store_true')
     a = ap.parse_args()
 
-    data = os.path.join(a.out, 'data')
+    tag = {'emilia': 'emilia16k', 'asvspoof': 'asv19la'}[a.source]
+    work = a.work or os.path.join(HERE, 'work', tag)
+    out = a.out or os.path.join(
+        REPO, 'results', f'{datetime.date.today():%Y-%m-%d}_deepfake-probe-{tag}')
+    data = os.path.join(out, 'data')
     if os.path.exists(os.path.join(data, 'deepfake_scores.csv')):
         sys.exit(f'{data} already has results -- results/ is never overwritten; use --out')
     os.makedirs(data, exist_ok=True)
-    sel = pick_emilia(a.emilia_csv)
+
+    if a.source == 'emilia':
+        sel, seconds = pick_emilia(a.emilia_csv), SECONDS
+        if a.n_clips:
+            sel = sel.head(a.n_clips)
+        desc = (f'{len(sel)} real Emilia speech clips (one per speaker, {SECONDS:.0f} s, '
+                f'16 kHz throughout).')
+        src = dict(emilia_csv=a.emilia_csv,
+                   clip_filter=dict(n=len(sel), seconds=SECONDS, dnsmos_min=DNSMOS_MIN, seed=SEED))
+    else:
+        sel, seconds = pick_asvspoof(a.asv_protocol, a.asv_audio, a.n_clips or 2), None
+        desc = (f'{len(sel)} bona fide ASVspoof2019 LA eval clips (one per speaker, full length '
+                f'{sel.duration_s.min():.1f}-{sel.duration_s.max():.1f} s, native 16 kHz) -- the '
+                f'in-domain test set AASIST and RawNet2 were trained for.')
+        src = dict(asv_audio=a.asv_audio, asv_protocol=a.asv_protocol,
+                   clip_filter=dict(n=len(sel), label='bonafide', min_samples=D.WIN,
+                                    one_per_speaker=True, seed=SEED))
     sel.to_csv(os.path.join(data, 'clips.csv'), index=False)
-    print(sel[['clip_id', 'speaker', 'dnsmos', 'duration_s', 'path']].to_string(index=False))
+    print(sel.to_string(index=False))
 
     # ---- 1. embed ---------------------------------------------------------- #
-    built = [build_variants(r.clip_id, r.path, a.work, a.reuse_wavs)
+    built = [build_variants(r.clip_id, r.path, work, a.reuse_wavs, seconds)
              for r in sel.itertuples()]
 
     # ---- 2. watermark check + quality ------------------------------------- #
@@ -178,9 +241,9 @@ def main():
     df = pd.DataFrame(rows)
     df.to_csv(os.path.join(data, 'deepfake_scores.csv'), index=False)
 
-    write_summary(a.out, df, pd.DataFrame(wm_rows), pd.DataFrame(q_rows))
-    write_params(a.out, sel, a.emilia_csv, dets)
-    print(f'\ndone -> {a.out}')
+    write_summary(out, df, pd.DataFrame(wm_rows), pd.DataFrame(q_rows), desc)
+    write_params(out, sel, src, dets)
+    print(f'\ndone -> {out}')
 
 
 def md_table(t):
@@ -193,7 +256,7 @@ def md_table(t):
     return '\n'.join(lines)
 
 
-def write_summary(out, df, wm, q):
+def write_summary(out, df, wm, q, desc):
     order = list(VARIANTS)
     mean = df.pivot_table(index='variant', columns='detector', values='p_spoof',
                           aggfunc='mean').reindex(order)
@@ -217,8 +280,7 @@ def write_summary(out, df, wm, q):
     f = md_table
     md = [
         '# Deepfake detectors vs watermarked speech -- summary\n',
-        f'{n} real Emilia speech clips (one per speaker, {SECONDS:.0f} s, 16 kHz throughout). '
-        f'P(spoof) is the detector\'s probability the clip is fake, averaged over 4.04 s windows. '
+        f'{desc} P(spoof) is the detector\'s probability the clip is fake, averaged over 4.04 s windows. '
         f'Verdict "fake" = P(spoof) > {THRESH}.\n',
         '## Mean P(spoof)\n', f(mean), '',
         f'## Clips called "fake" (out of {n})\n', f(nfake.astype(int)), '',
@@ -236,7 +298,7 @@ def write_summary(out, df, wm, q):
     open(os.path.join(out, 'summary.md'), 'w').write('\n'.join(md))
 
 
-def write_params(out, sel, emilia_csv, dets):
+def write_params(out, sel, src, dets):
     def sh(c):
         try: return subprocess.check_output(c, cwd=REPO, text=True).strip()
         except Exception: return None
@@ -244,8 +306,7 @@ def write_params(out, sel, emilia_csv, dets):
     p = dict(
         git_commit=sh(['git', 'rev-parse', 'HEAD']), slurm_job=os.environ.get('SLURM_JOB_ID'),
         date=datetime.datetime.now().isoformat(timespec='seconds'), host=platform.node(),
-        emilia_csv=emilia_csv, clips=sel[['clip_id', 'speaker', 'path']].to_dict('records'),
-        clip_filter=dict(n=N_CLIPS, seconds=SECONDS, dnsmos_min=DNSMOS_MIN, seed=SEED),
+        **src, clips=sel[['clip_id', 'speaker', 'path']].to_dict('records'),
         variants=VARIANTS, sr=SR, timbre_sr=cl.SR_MASTER, window_samples=D.WIN,
         threshold=THRESH, wm_detect_threshold=0.8,
         truth_bits=dict(audioseal=cl.AUDIOSEAL_BITS, aware=cl.AWARE_BITS),
