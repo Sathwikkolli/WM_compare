@@ -59,3 +59,4 @@ deepfake_probe/*.log
 # masking experiments: audio and Slurm logs stay on the cluster
 masking/work/
 masking/*.log
+masking/clips.json

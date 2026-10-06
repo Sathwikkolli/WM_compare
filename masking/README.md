@@ -10,6 +10,8 @@ masking threshold. Each run archives to `results/<date>_masking-*/`.
 | `run_e0_e1.py` | one clip: E0 baseline + E1a budget usage + E1b window readability |
 | `e0_e1.sbatch` | Slurm array 0-29 |
 | `aggregate.py` | tables, gate verdicts, figures -> `results/<run>/summary.md` |
+| `psy.py` | masking threshold (Johnston-style) and AWARE budget on AWARE's STFT grid |
+| `run_phase1.py` / `phase1.sbatch` / `aggregate_phase1.py` | Phase 1, E2-E6 (budget shape tests, no embedder) |
 
 ```bash
 conda activate wmcompare && cd $WM_COMPARE_BASE/masking
