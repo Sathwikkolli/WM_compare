@@ -32,6 +32,8 @@ def fmt(m, s):
 
 
 def write_params(qual):
+    if not os.path.exists(C.CLIPS_JSON):        # off-cluster re-aggregation: keep the cluster's params.json
+        return
     import subprocess
     from importlib.metadata import version, PackageNotFoundError
 
@@ -52,12 +54,37 @@ def write_params(qual):
     json.dump(params, open(os.path.join(C.RESULTS, "params.json"), "w"), indent=2)
 
 
+def true_initial(z, tol_db):
+    """Original magnitudes, rebuilt from the bounds: upper = M * (1 + 10^(-tol/20)).
+    The npz `initial` field cannot be trusted for runs captured before the
+    in-place fix in common.OptimizeCapture (it holds the last iterate)."""
+    return z["upper"] / (1 + 10 ** (-tol_db / 20))
+
+
+def e1a_from_npz(tol_db):
+    """E1a stats recomputed from data/e1a_<clip>.npz (the per-clip e1a_<clip>.json
+    files of the 2026-10-06 run are wrong -- see the run README). Writes
+    e1a_stats.csv beside summary.md."""
+    from run_e0_e1 import e1a_stats
+    rows = []
+    for f in sorted(glob.glob(os.path.join(C.DATA, "e1a_*.npz"))):
+        z = np.load(f)
+        cap = dict(initial=true_initial(z, tol_db), final=z["final"], upper=z["upper"],
+                   freq_indices=z["freq_indices"])
+        st, _ = e1a_stats(cap, tol_db)
+        st["clip_id"] = os.path.basename(f)[4:-4]
+        rows.append(st)
+    df = pd.DataFrame(rows)
+    df.to_csv(os.path.join(C.RESULTS, "e1a_stats.csv"), index=False)
+    return df
+
+
 def main():
     os.makedirs(C.FIGS, exist_ok=True)
     qual = load("e0_quality_*.csv")
     att = load("e0_attacks_*.csv")
     win = load("e1b_*.csv")
-    e1a = pd.DataFrame([json.load(open(f)) for f in sorted(glob.glob(os.path.join(C.DATA, "e1a_*.json")))])
+    e1a = e1a_from_npz(float(qual.tolerance_db.iloc[0]))
     if qual.empty:
         raise SystemExit(f"no data in {C.DATA}")
     n = len(qual)
@@ -144,13 +171,16 @@ def main():
         fig, ax = plt.subplots(1, 3, figsize=(15, 4))
         for f in npz:
             z = np.load(f)
-            delta = z["upper"] - z["initial"]
-            u = np.divide(np.abs(z["final"] - z["initial"]), delta,
+            init = true_initial(z, float(qual.tolerance_db.iloc[0]))
+            delta = z["upper"] - init
+            u = np.divide(np.abs(z["final"] - init), delta,
                           out=np.zeros_like(delta), where=delta > 1e-12)
             utils.append(u)
+            nf = len(z["freq_indices"])
+            U, Mg = u.reshape(nf, -1), init.reshape(nf, -1)
             freqs = z["freq_indices"] * C.SR / 1024
-            ax[1].plot(freqs, z["util_per_freq"], alpha=0.3, lw=0.8)
-            ax[2].scatter(z["frame_band_db"], z["util_per_frame"], s=2, alpha=0.3)
+            ax[1].plot(freqs, U.mean(axis=1), alpha=0.3, lw=0.8)
+            ax[2].scatter(10 * np.log10(np.sum(Mg ** 2, axis=0) + 1e-12), U.mean(axis=0), s=2, alpha=0.3)
         ax[0].hist(np.concatenate(utils), bins=50, range=(0, 1.0001))
         ax[0].set(title="E1a: budget utilisation, all coefficients", xlabel="|Δ| / budget", ylabel="count")
         ax[0].set_yscale("log")

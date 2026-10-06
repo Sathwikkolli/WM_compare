@@ -62,10 +62,16 @@ class OptimizeCapture:
 
     def _wrapped(self, initial_coeffs, stft_magnitude, watermark_pattern,
                  freq_indices, not_freq_indices, bounds, stft_phase):
+        # Copy BEFORE optimising: on CPU, aware.utils.to_tensor returns the same
+        # tensor and .to("cpu") is a no-op, so _optimize updates initial_coeffs
+        # in place -- after the call it holds the LAST iterate, not the original
+        # magnitudes. (The 2026-10-06 run captured it after; aggregate.py derives
+        # the true initial from `upper` instead, which is unaffected.)
+        initial = initial_coeffs.detach().cpu().numpy().astype("float32").copy()
         out = self.orig(initial_coeffs, stft_magnitude, watermark_pattern,
                         freq_indices, not_freq_indices, bounds, stft_phase)
         self.data = dict(
-            initial=initial_coeffs.detach().cpu().numpy().astype("float32").copy(),
+            initial=initial,
             final=out.detach().cpu().numpy().astype("float32").copy(),
             upper=np.array([b[1] for b in bounds], dtype="float32"),
             lower=np.array([b[0] for b in bounds], dtype="float32"),

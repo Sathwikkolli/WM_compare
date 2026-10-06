@@ -46,9 +46,11 @@ def main():
 
     def patched_optimize(initial_coeffs, stft_magnitude, watermark_pattern,
                           freq_indices, not_freq_indices, bounds, stft_phase):
+        # copy first: on CPU _optimize updates initial_coeffs in place, so reading
+        # it afterwards gives the last iterate (found in results/2026-10-06_masking-e0-e1)
+        captured["initial"] = initial_coeffs.detach().cpu().numpy().copy()
         result = orig_optimize(initial_coeffs, stft_magnitude, watermark_pattern,
                                 freq_indices, not_freq_indices, bounds, stft_phase)
-        captured["initial"] = initial_coeffs.detach().cpu().numpy().copy()
         captured["final"] = result.detach().cpu().numpy().copy()
         captured["bounds"] = bounds
         return result

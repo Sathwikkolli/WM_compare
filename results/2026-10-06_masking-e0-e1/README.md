@@ -69,6 +69,80 @@ operating point (lower tolerance), where the budget will bind.
 - `summary.md`, `e0_robustness_table.csv`, `params.json`, `figures/` — from `masking/aggregate.py`
 - Audio (original + watermarked) stays on the cluster in `masking/work/` (gitignored).
 
+## Correction (found while reading the results)
+
+The first `aggregate.py` printed **Gate 1a: SLACK** (9.3 % saturated). That was a
+bug in `masking/common.py`, not a finding. On CPU, `aware.utils.to_tensor` returns
+the same tensor and `.to("cpu")` is a no-op, so `AWAREEmbedder._optimize` updates
+`initial_coeffs` **in place**. The capture read it *after* the call, so the
+`initial` field in `data/e1a_<clip>.npz` and every number in `data/e1a_<clip>.json`
+compare the best iterate with the *last* iterate, not with the original audio.
+
+- Fixed: `OptimizeCapture` now copies before optimising.
+- Recomputed without a rerun: `upper = M·(1 + 10^(−tol/20))` is unaffected, so
+  `aggregate.py` rebuilds the true magnitudes from it. Corrected per-clip stats are
+  in `e1a_stats.csv`. **The `data/e1a_<clip>.json` files are wrong** and are kept
+  only because `data/` is never overwritten. Ignore `initial` in the npz files.
+- The older single-clip probe (`probe_budget_utilization.py`) had the same bug, so
+  its "~5 % hot tail" — the basis of prediction 3 — was also an artefact. Fixed too.
+- E0 and E1b are unaffected (they never use the capture).
+
+## Results (30 clips, 3.0–6.7 s, median 3.9 s)
+
+**E0 — baseline to beat**
+
+| | value |
+|---|---|
+| PESQ | 4.15 ± 0.20 (min 3.62) |
+| STOI | 0.985 |
+| SNR / SI-SNR | 17.1 ± 3.7 dB (min 9.9) / 18.5 dB |
+| embed time (CPU, 4 cores) | median 12.2 s (one outlier 259 s) |
+| clean bit accuracy | 0.997; 28/30 perfect, asv11 and asv18 have 1 wrong bit of 20 |
+| 11 attacks | **identical to clean** for MP3 128/64, AWGN 25 dB, resample 8 k, lowpass 6 k, amp 0.6/1.4, requant 8 bit, crop 2048/6144 |
+| median_3 | 0.983 (4 more clips lose 1–2 bits) |
+
+**E1a — budget usage (corrected)**
+
+| | value |
+|---|---|
+| coefficients at > 95 % of budget | **89.2 %** (82–94 % per clip) |
+| median utilisation | **1.00** |
+| quiet bins (bottom 25 %) at the limit | 99.1 % |
+| loud bins (top 25 %) at the limit | 78.6 % |
+| pushed up vs down at the limit | 48 % / 52 % |
+| Spearman(frame energy, frame utilisation) | −0.76 |
+| watermark energy relative to the band | −6.8 dB (the 6 dB tolerance itself) |
+
+**E1b — window readability.** 1 s windows decode at chance (~0.5) below about
+−30 dBFS and at 0.8–1.0 in speech (−25 to −12 dBFS). Q1→Q5 loudness: 0.50 → 0.90
+on clean, and the **same curve** under mp3_64 and awgn_25.
+
+## Gate 1
+
+- **1a: BINDING** (89 % ≥ 25 %). Prediction 3 refuted (it rested on the buggy probe).
+- **1b: errors CLUSTER** by loudness (Q5 − Q1 = +0.40 ≥ 0.10). Prediction 4 confirmed.
+
+## What it means
+
+1. **AWARE is a bang-bang embedder.** The optimiser pushes almost every 1–4 kHz
+   coefficient to ±budget, about half up and half down. The watermark is therefore
+   the budget times a sign pattern. **Whatever shape the budget has is the shape
+   of the watermark**, so swapping the 6 dB rule for a masking threshold changes
+   the watermark directly. This is the strongest possible case for E10.
+2. **Quiet regions carry almost no watermark.** The budget is proportional to the
+   magnitude, so pauses get a near-zero change and decode at chance even with no
+   attack. Clean and attacked curves are the same, so this is an embedding
+   limitation, not attack damage. Masking can add room here only through
+   post-masking after loud frames and the hearing floor; frequency spreading helps
+   inside speech frames, not in silence.
+3. **The starter attacks are too weak to separate methods.** 11 of 12 give the
+   clean BER. E10 (equal quality, compare BER) would show no difference with this
+   set. **Before E10 we need a harder attack set** where baseline AWARE has
+   BER around 5–20 %. Earlier runs here point to Encodec 6 kbps, MP3 8–16 kbps,
+   resampling to 4 kHz, AWGN 5–10 dB, and highpass ~1–2 kHz.
+4. Loud frames leave ~8 % of the budget unused — the optimiser stops needing it
+   there. More room in loud frames is less valuable than more room elsewhere.
+
 ## Status
 
-planned — code committed, not yet run.
+complete — E1a corrected in place of the first aggregate output (see Correction).

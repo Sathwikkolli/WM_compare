@@ -1,5 +1,13 @@
 # E0 + E1 summary — 2026-10-06_masking-e0-e1
 
+> **Conclusion.** Gate 1a: AWARE's budget is **binding** — 89 % of 1–4 kHz
+> coefficients sit at the ±6 dB limit, so the budget's shape *is* the watermark's
+> shape and a masking-threshold budget would change the watermark directly.
+> Gate 1b: readability **clusters by loudness** — 1 s windows below ~−30 dBFS decode
+> at chance, identically with and without attacks. The 12 starter attacks barely
+> move BER (11 equal clean), so E10 needs a harder attack set first. E1a below is
+> recomputed from the bounds; see README "Correction".
+
 Clips: **30** bona fide ASVspoof2019 LA eval utterances (one per speaker). AWARE `AWARE`, 400 iterations, tolerance 6.0 dB, 20-bit payload.
 
 ## E0 — quality of the watermarked audio
@@ -34,20 +42,20 @@ Clips: **30** bona fide ASVspoof2019 LA eval utterances (one per speaker). AWARE
 
 | quantity | mean over clips | min | max |
 |---|---|---|---|
-| util_mean | 0.405 | 0.000 | 1.263 |
-| util_median | 0.000 | 0.000 | 0.000 |
-| frac_util_gt_0p95 | 0.093 | 0.000 | 0.172 |
-| frac_util_gt_0p5 | 0.112 | 0.000 | 0.194 |
-| frac_util_lt_0p05 | 0.831 | 0.735 | 1.000 |
-| quiet_util_mean | 0.177 | 0.000 | 0.389 |
-| loud_util_mean | 0.641 | 0.000 | 3.841 |
-| quiet_frac_sat | 0.160 | 0.000 | 0.382 |
-| loud_frac_sat | 0.070 | 0.000 | 0.109 |
-| sat_pushed_up | 0.838 | 0.707 | 0.921 |
-| spearman_frame_energy_vs_util | 0.085 | -0.277 | 0.634 |
-| rel_change_energy_db | -inf | -inf | -24.575 |
+| util_mean | 0.952 | 0.924 | 0.971 |
+| util_median | 1.000 | 1.000 | 1.000 |
+| frac_util_gt_0p95 | 0.892 | 0.820 | 0.938 |
+| frac_util_gt_0p5 | 0.956 | 0.933 | 0.972 |
+| frac_util_lt_0p05 | 0.004 | 0.003 | 0.007 |
+| quiet_util_mean | 0.995 | 0.988 | 0.999 |
+| loud_util_mean | 0.916 | 0.892 | 0.939 |
+| quiet_frac_sat | 0.991 | 0.977 | 0.998 |
+| loud_frac_sat | 0.786 | 0.730 | 0.859 |
+| sat_pushed_up | 0.476 | 0.459 | 0.509 |
+| spearman_frame_energy_vs_util | -0.761 | -0.894 | -0.450 |
+| rel_change_energy_db | -6.802 | -7.721 | -6.407 |
 
-**Gate 1a verdict: budget is SLACK** (9.3% of coefficients use > 95% of their budget; rule: ≥ 25% binding, < 10% slack).
+**Gate 1a verdict: budget is BINDING** (89.2% of coefficients use > 95% of their budget; rule: ≥ 25% binding, < 10% slack).
 
 ## E1b — which windows carry the watermark
 
