@@ -1,5 +1,7 @@
 # Phase 1 (E2–E6) summary — 2026-10-06_masking-phase1
 
+> **Conclusion.** As a drop-in replacement, this masking model loses to AWARE's 6 dB rule on PESQ: at equal energy it is −0.25 PESQ worse; at equal PESQ it carries 5.6 dB less energy. It puts room in pauses (hearing floor + post-masking) and smears energy from harmonic peaks into valleys; tonality detection barely fires. At equal energy codecs keep it about as well as AWARE's shape. See README.
+
 > **Gate 2: FAIL** — A (E3) ✗, B (E4) ✗, C (E6) ✗. Rule: (A or B) and C.
 
 Clips: **30**. Shapes: `aware` = |X|·10^(−6/20); `mask` = Johnston-style masking threshold (`masking/psy.py`); `flat` = constant (control). Random ±1 signs on |X| in 1–4 kHz, phase kept (AWARE's watermark is ~signs × budget, E1a).

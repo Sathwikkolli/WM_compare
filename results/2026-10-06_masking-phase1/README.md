@@ -49,6 +49,51 @@ From a model sanity check on 3 local speech clips (budgets only, no audio scorin
 5. E6: the main risk — energy moved into valleys is what codecs quantise away. Expect
    corr ratio 0.8–0.95, i.e. C is the gate most likely to fail.
 
+## Results (30 clips) — **Gate 2: FAIL**
+
+| | result | gate |
+|---|---|---|
+| E2 | mask allows more room in 75 % of bins (median +4.6 dB) but **3 dB less total energy**; **+8.6 dB in quiet frames**, +3.1 dB in loud frames; AWARE exceeds the threshold in 25 % of bins | — |
+| E3 | equal energy: PESQ aware **4.13**, mask **3.85** (Δ −0.25, 0/30 clips better, p = 2e−9), flat 1.96 | A ✗ |
+| E4 | at AWARE's PESQ the mask shape carries **−5.6 dB** energy (all 30 clips negative, range −11 to −2 dB); it must sit 2.3 dB *below* its own modelled threshold | B ✗ |
+| E5 | mask worse in both frame types: noisy Δ −0.04, tonal Δ −0.16 | — |
+| E6 | at **equal energy** the mask shape survives codecs almost as well (corr mp3_64 0.978 vs 0.983, opus_32 0.871 vs 0.904). At equal quality it survives worse (opus_32 ratio 0.77) — a consequence of E4's lower energy, not of codecs targeting the shape | C ✗ |
+
+Predictions 1 (direction of E2) and 5 (codec risk, partly) held; 2, 3, 4 refuted.
+
+## Why it failed (from the budget maps, `figures/e2_budget_maps.png`)
+
+1. **Room in silence.** The mask budget is +15–20 dB above AWARE's in pauses
+   (start and end of the clip). That comes from the hearing floor (96 dB SPL
+   calibration) and the 300 dB/s post-masking tail. PESQ — and listeners at a
+   normal level — hear noise in pauses. AWARE's rule puts ~nothing there.
+2. **Smearing between harmonics.** The threshold is computed per critical band, so
+   it is flat across a band and ignores the harmonic peaks and valleys of voiced
+   speech. Energy moves from the peaks (where AWARE hides it under the speech
+   itself) into the valleys (where it is exposed).
+3. **Tonality detection does not fire.** Only 0.1 % of 1–4 kHz bins are classed
+   tonal, so almost every band gets the generous noise offset (5.5 dB) instead of
+   the tonal one (14.5 + b dB) — voiced speech is treated as noise.
+4. **AWARE's own rule is a strong baseline.** Per-bin self-masking (change ∝ the
+   bin's own magnitude) hides energy exactly under the spectral peaks; the flat
+   control (−2.2 PESQ) shows how much shaping matters.
+
+## Caveats
+
+- The only quality judge is PESQ (no ODG / listening test). PESQ is a speech-quality
+  model, not a masking-exact one, and it punishes noise in low-level frames hard.
+- This is one masking model with one parameter set. The failure is of *this model
+  as a drop-in replacement*, not of masking in general.
+
+## Next (proposed)
+
+Phase 2 (E7 ablation + E9 calibration), same noise framework, to find which part
+hurts: switch off the hearing floor / temporal tails; keep the per-bin peak structure
+(e.g. threshold = min(band threshold, per-bin self-masking), or MPEG model 1 tonal
+maskers per bin); test calibration 86/96/106 dB. And E12 mixes:
+`min(mask, aware)` (only remove AWARE's above-threshold 25 %) and `aware` boosted
+where the mask allows more, capped at the mask.
+
 ## Status
 
-planned — code pushed, not yet run.
+complete — Gate 2 failed; redesign before touching AWARE.
