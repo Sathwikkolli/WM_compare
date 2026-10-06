@@ -1,0 +1,19 @@
+{
+  "n_coeffs": 42653,
+  "n_freq_bins": 193,
+  "n_frames": 221,
+  "tolerance_db": 6.0,
+  "util_mean": 1.2625706195831299,
+  "util_median": 0.0,
+  "frac_util_gt_0p95": 0.15426816402128807,
+  "frac_util_gt_0p5": 0.17865097414015427,
+  "frac_util_lt_0p05": 0.7550699833540431,
+  "quiet_util_mean": 0.3110920786857605,
+  "loud_util_mean": 3.8411543369293213,
+  "quiet_frac_sat": 0.29951237809452363,
+  "loud_frac_sat": 0.10896474118529632,
+  "sat_pushed_up": 0.875531914893617,
+  "spearman_frame_energy_vs_util": 0.018865554159671803,
+  "rel_change_energy_db": -24.57465717858738,
+  "clip_id": "asv26"
+}

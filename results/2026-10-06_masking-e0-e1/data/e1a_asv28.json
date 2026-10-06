@@ -1,0 +1,19 @@
+{
+  "n_coeffs": 40337,
+  "n_freq_bins": 193,
+  "n_frames": 209,
+  "tolerance_db": 6.0,
+  "util_mean": 0.0,
+  "util_median": 0.0,
+  "frac_util_gt_0p95": 0.0,
+  "frac_util_gt_0p5": 0.0,
+  "frac_util_lt_0p05": 1.0,
+  "quiet_util_mean": 0.0,
+  "loud_util_mean": 0.0,
+  "quiet_frac_sat": 0.0,
+  "loud_frac_sat": 0.0,
+  "sat_pushed_up": NaN,
+  "spearman_frame_energy_vs_util": NaN,
+  "rel_change_energy_db": -Infinity,
+  "clip_id": "asv28"
+}

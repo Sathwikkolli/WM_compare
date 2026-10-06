@@ -1,0 +1,2 @@
+clip_id,utt,duration_s,embed_seconds,num_iterations,tolerance_db,payload,pesq,stoi,snr_db,si_snr_db,odg
+asv15,LA_E_1636866,4.947,14.0,400,6.0,01011001111011111100,3.623277425765991,0.9897359495170028,21.294216903410124,21.292176204747424,
