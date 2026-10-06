@@ -1,0 +1,16 @@
+{
+  "ratio_db_median": 9.365311343553472,
+  "ratio_db_p10": -2.8385545372398413,
+  "ratio_db_p90": 22.637599001698394,
+  "frac_mask_gt_aware": 0.8109192093648052,
+  "energy_ratio_db": -1.4469877122110302,
+  "ratio_db_quiet_frames": 16.389859239577984,
+  "ratio_db_loud_frames": 2.610698482680658,
+  "frac_bins_tonal": 0.0014584532719247745,
+  "ratio_db_tonal": -0.6756777508021301,
+  "ratio_db_noisy": 9.377946653331577,
+  "aware_above_mask": 0.18908079063519478,
+  "aware_above_mask_tonal": 0.5263157894736842,
+  "aware_above_mask_noisy": 0.18858823077218742,
+  "clip_id": "asv21"
+}
