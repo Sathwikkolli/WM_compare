@@ -55,3 +55,7 @@ client_correlation_all.csv
 deepfake_probe/third_party/
 deepfake_probe/work/
 deepfake_probe/*.log
+
+# masking experiments: audio and Slurm logs stay on the cluster
+masking/work/
+masking/*.log
