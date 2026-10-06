@@ -5,8 +5,8 @@ Every detector exposes   p_spoof(y16) -> (mean P(spoof), [per-window P(spoof)])
 where y16 is mono float32 at 16 kHz.
 
 All three were trained on 16 kHz clips of ~4 s, so long clips are cut into
-non-overlapping 64600-sample windows (4.04 s, AASIST/RawNet2's nb_samp) and the
-per-window probabilities are averaged. A clip shorter than one window is
+64600-sample windows (4.04 s, AASIST/RawNet2's nb_samp; the last one is
+end-aligned so the tail is covered) and the per-window probabilities are averaged. A clip shorter than one window is
 repeat-padded exactly as AASIST's own data_utils.pad() does.
 
 Label convention: AASIST and RawNet2 both use class 1 = bona fide (ASVspoof),
@@ -26,7 +26,10 @@ def windows(y, win=WIN):
     y = np.asarray(y, dtype='float32')
     if len(y) < win:
         return [np.tile(y, int(win / max(len(y), 1)) + 1)[:win]]
-    return [y[i * win:(i + 1) * win] for i in range(len(y) // win)]
+    ws = [y[i * win:(i + 1) * win] for i in range(len(y) // win)]
+    if len(y) % win:                     # cover the tail with one end-aligned window
+        ws.append(y[-win:])
+    return ws
 
 
 def _import_file(path, name):

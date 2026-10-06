@@ -9,8 +9,8 @@
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
 #SBATCH --output=/home/ksathwik/wm_compare/deepfake_probe/df_probe_%j.log
-# 6 clips x 2 AWARE embeds (aware_only + all_three) = 12 AWARE optimizations.
-# GPU makes that minutes; on `standard` (CPU) budget ~4-6 h instead.
+# 6 Emilia clips x 10 s at 16 kHz; 12 AWARE optimizations (aware_only + all_three).
+# Clips come from $EMILIA_CSV (default ~/projects/aura_watermark/data/val.csv).
 # Run setup_detectors.sh once on the login node before submitting.
 
 eval "$(conda shell.bash hook)"; conda activate wmcompare

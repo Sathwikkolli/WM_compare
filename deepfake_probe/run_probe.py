@@ -1,23 +1,27 @@
 """
 run_probe.py  --  does watermarking make real speech look like a deepfake?
 
-For every clip, three versions are built at 22.05 kHz (cascade_lib's canonical rate):
-    clean       original, passed through the same read/write path (control)
+Input: 6 real Emilia speech clips (one per speaker, DNSMOS >= 3, trimmed to 10 s),
+loaded at 16 kHz. Everything is done at 16 kHz:
+    clean       original, through the same 16 kHz read/write path (control)
     aware_only  AWARE alone
     all_three   AudioSeal -> AWARE -> Timbre, stacked (cascade order)
+
+AudioSeal and AWARE embed/detect natively at 16 kHz (no resampling). Timbre only
+runs at 22.05 kHz, so its step alone is 16k -> 22.05k -> embed -> 16k.
 
 Then for each version:
     * every watermark is detected (on all versions, so clean is the false-positive floor)
     * PESQ / SNR / SI-SNR / STOI vs clean
-    * three deepfake detectors (AASIST, RawNet2, XLS-R) give P(spoof) at 16 kHz
+    * three deepfake detectors (AASIST, RawNet2, XLS-R) give P(spoof)
 
-Output -> results/<date>_deepfake-probe/{data/*.csv, summary.md, params.json}
-Audio  -> deepfake_probe/work/<clip>/<variant>.wav   (gitignored)
+Output -> results/<date>_deepfake-probe-emilia16k/{data/*.csv, summary.md, params.json}
+Audio  -> deepfake_probe/work/emilia16k/<clip>/<variant>.wav   (gitignored)
 
-    python run_probe.py                 # all of clean_01..06
+    python run_probe.py                 # pick 6 Emilia clips, embed, detect
     python run_probe.py --reuse-wavs    # skip embedding if wavs already exist
 """
-import os, sys, glob, json, argparse, datetime, platform, subprocess
+import os, sys, json, argparse, datetime, platform, subprocess
 import numpy as np
 import pandas as pd
 
@@ -28,6 +32,7 @@ sys.path.insert(0, os.path.join(REPO, 'cascade'))
 import cascade_lib as cl                                       # noqa: E402
 import detectors as D                                          # noqa: E402
 
+SR = 16000                       # working rate for everything in this experiment
 VARIANTS = {                     # variant -> watermarks embedded, in order
     'clean':      (),
     'aware_only': ('aware',),
@@ -35,11 +40,71 @@ VARIANTS = {                     # variant -> watermarks embedded, in order
 }
 THRESH = 0.5                     # P(spoof) > THRESH -> verdict "fake"
 
+# clip selection -- same source and filters as cascade/emilia_bench.py
+EMILIA_CSV = os.environ.get(
+    'EMILIA_CSV', os.path.expanduser('~/projects/aura_watermark/data/val.csv'))
+N_CLIPS, SECONDS, DNSMOS_MIN, SEED = 6, 10.0, 3.0, 1234
 
-def build_variants(clip, work, reuse):
-    stem = os.path.splitext(os.path.basename(clip))[0]
-    d = os.path.join(work, stem)
-    y = cl.read_wav(clip, cl.SR_MASTER)
+
+def pick_emilia(csv_path):
+    """N_CLIPS held-out Emilia clips, one per speaker, deterministic for SEED."""
+    df = pd.read_csv(csv_path)
+    if 'dataset' in df.columns:                 # val.csv mixes Emilia + FMA music
+        df = df[df['dataset'] == 'emilia']
+    df = df[(df['dnsmos'] >= DNSMOS_MIN) & (df['duration_s'] >= SECONDS)]
+    sel = (df.sample(frac=1.0, random_state=SEED)
+             .drop_duplicates('speaker').head(N_CLIPS).reset_index(drop=True))
+    if len(sel) < N_CLIPS:
+        sys.exit(f'only {len(sel)} speakers pass the filters in {csv_path}')
+    sel.insert(0, 'clip_id', [f'emilia_{i:02d}' for i in range(len(sel))])
+    return sel
+
+
+# ---- 16 kHz embed / detect ------------------------------------------------- #
+# cascade_lib's adapters take 22.05 kHz input and resample internally. Here the
+# signal is already 16 kHz, so AudioSeal/AWARE are called at their native rate
+# directly (same calls as the adapters, minus the resampling); only Timbre,
+# which has no 16 kHz mode, goes through 22.05 kHz.
+def embed16(tool, y):
+    a = cl.get_adapter(tool)
+    if tool == 'audioseal':
+        torch = a._torch
+        x = torch.from_numpy(y).view(1, 1, -1)
+        msg = torch.tensor([[int(b) for b in a.truth]], dtype=torch.int32)
+        with torch.no_grad():
+            w = a._gen(x, sample_rate=SR, message=msg, alpha=1.0)
+        z = w.squeeze().cpu().numpy()
+    elif tool == 'aware':
+        from aware.service import embed_watermark
+        bits = np.array([int(b) for b in a.truth], dtype=np.int64)
+        z = np.asarray(embed_watermark(y, SR, bits, a._emb))
+    else:
+        z = cl.resample(a.embed(cl.resample(y, SR, cl.SR_MASTER)), cl.SR_MASTER, SR)
+    z = np.asarray(z, dtype='float32').ravel()[:len(y)]
+    return np.clip(np.pad(z, (0, len(y) - len(z))), -1.0, 1.0)
+
+
+def detect16(tool, y):
+    """-> (conf, bits, bit_acc), same contract as the cascade_lib adapters."""
+    a = cl.get_adapter(tool)
+    if tool == 'audioseal':
+        torch = a._torch
+        with torch.no_grad():
+            prob, msg = a._det.detect_watermark(torch.from_numpy(y).view(1, 1, -1),
+                                                sample_rate=SR)
+        bits = ''.join(map(str, (msg.squeeze() > 0.5).int().tolist()))
+        return float(prob), bits, cl.bit_acc(bits, a.truth)
+    if tool == 'aware':
+        from aware.service import detect_watermark
+        pat, conf = detect_watermark(y, SR, a._det)
+        bits = ''.join(map(str, np.asarray(pat).astype(int).ravel()[:len(a.truth)].tolist()))
+        return float(conf), bits, cl.bit_acc(bits, a.truth)
+    return a.detect(cl.resample(y, SR, cl.SR_MASTER))
+
+
+def build_variants(clip_id, src, work, reuse):
+    d = os.path.join(work, clip_id)
+    y = cl.read_wav(src, SR)[:int(SECONDS * SR)]
     paths = {}
     for var, chain in VARIANTS.items():
         p = os.path.join(d, f'{var}.wav')
@@ -48,46 +113,45 @@ def build_variants(clip, work, reuse):
             continue
         z = y.copy()
         for tool in chain:
-            z = cl.get_adapter(tool).embed(z)
-            z = np.clip(z, -1.0, 1.0)
-        cl.write_wav(p, z, cl.SR_MASTER)
-        print(f'  [{stem}] wrote {var}', flush=True)
-    return stem, paths
+            z = embed16(tool, z)
+        cl.write_wav(p, z, SR)
+        print(f'  [{clip_id}] wrote {var}', flush=True)
+    return clip_id, paths
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--clips', default=os.path.join(REPO, 'audio', 'clean_set',
-                                                    'clean_0[1-6]_speech_*.wav'))
-    ap.add_argument('--work', default=os.path.join(HERE, 'work'))
+    ap.add_argument('--emilia-csv', default=EMILIA_CSV)
+    ap.add_argument('--work', default=os.path.join(HERE, 'work', 'emilia16k'))
     ap.add_argument('--out',  default=os.path.join(
-        REPO, 'results', f'{datetime.date.today():%Y-%m-%d}_deepfake-probe'))
+        REPO, 'results', f'{datetime.date.today():%Y-%m-%d}_deepfake-probe-emilia16k'))
     ap.add_argument('--reuse-wavs', action='store_true')
     a = ap.parse_args()
 
-    clips = sorted(glob.glob(a.clips))
-    if not clips:
-        sys.exit(f'no clips match {a.clips}')
     data = os.path.join(a.out, 'data')
     if os.path.exists(os.path.join(data, 'deepfake_scores.csv')):
         sys.exit(f'{data} already has results -- results/ is never overwritten; use --out')
     os.makedirs(data, exist_ok=True)
+    sel = pick_emilia(a.emilia_csv)
+    sel.to_csv(os.path.join(data, 'clips.csv'), index=False)
+    print(sel[['clip_id', 'speaker', 'dnsmos', 'duration_s', 'path']].to_string(index=False))
 
     # ---- 1. embed ---------------------------------------------------------- #
-    built = [build_variants(c, a.work, a.reuse_wavs) for c in clips]
+    built = [build_variants(r.clip_id, r.path, a.work, a.reuse_wavs)
+             for r in sel.itertuples()]
 
     # ---- 2. watermark check + quality ------------------------------------- #
     wm_rows, q_rows = [], []
-    for stem, paths in built:
+    for clip_id, paths in built:
         for var, p in paths.items():
-            y = cl.read_wav(p, cl.SR_MASTER)
+            y = cl.read_wav(p, SR)
             for tool in cl.TOOLS:
-                conf, bits, acc = cl.get_adapter(tool).detect(y)
-                wm_rows.append(dict(clip=stem, variant=var, watermark=tool,
+                conf, bits, acc = detect16(tool, y)
+                wm_rows.append(dict(clip=clip_id, variant=var, watermark=tool,
                                     embedded=tool in VARIANTS[var], conf=round(conf, 4),
                                     bit_acc=round(acc, 4), detected=acc >= 0.8))
             if var != 'clean':
-                q_rows.append(dict(clip=stem, variant=var,
+                q_rows.append(dict(clip=clip_id, variant=var,
                                    **cl.quality_metrics(paths['clean'], p)))
     pd.DataFrame(wm_rows).to_csv(os.path.join(data, 'watermark_check.csv'), index=False)
     pd.DataFrame(q_rows).to_csv(os.path.join(data, 'quality.csv'), index=False)
@@ -101,21 +165,21 @@ def main():
     # ---- 3. deepfake detectors -------------------------------------------- #
     dets = D.load_all()
     rows = []
-    for stem, paths in built:
+    for clip_id, paths in built:
         for var, p in paths.items():
-            y16 = cl.read_wav(p, cl.SR_16K)
+            y16 = cl.read_wav(p, SR)
             for det in dets:
                 ps, per = det.p_spoof(y16)
-                rows.append(dict(clip=stem, variant=var, detector=det.name,
+                rows.append(dict(clip=clip_id, variant=var, detector=det.name,
                                  p_spoof=round(ps, 4), verdict='fake' if ps > THRESH else 'real',
                                  n_windows=len(per), p_spoof_min=round(min(per), 4),
                                  p_spoof_max=round(max(per), 4)))
-                print(f'  {stem:28s} {var:10s} {det.name:8s} P(spoof)={ps:.3f}', flush=True)
+                print(f'  {clip_id:10s} {var:10s} {det.name:8s} P(spoof)={ps:.3f}', flush=True)
     df = pd.DataFrame(rows)
     df.to_csv(os.path.join(data, 'deepfake_scores.csv'), index=False)
 
     write_summary(a.out, df, pd.DataFrame(wm_rows), pd.DataFrame(q_rows))
-    write_params(a.out, clips, dets)
+    write_params(a.out, sel, a.emilia_csv, dets)
     print(f'\ndone -> {a.out}')
 
 
@@ -153,8 +217,8 @@ def write_summary(out, df, wm, q):
     f = md_table
     md = [
         '# Deepfake detectors vs watermarked speech -- summary\n',
-        f'{n} real speech clips (`clean_01`-`clean_06`, 8 kHz source). P(spoof) is the '
-        f'detector\'s probability the clip is fake, averaged over 4.04 s windows. '
+        f'{n} real Emilia speech clips (one per speaker, {SECONDS:.0f} s, 16 kHz throughout). '
+        f'P(spoof) is the detector\'s probability the clip is fake, averaged over 4.04 s windows. '
         f'Verdict "fake" = P(spoof) > {THRESH}.\n',
         '## Mean P(spoof)\n', f(mean), '',
         f'## Clips called "fake" (out of {n})\n', f(nfake.astype(int)), '',
@@ -172,7 +236,7 @@ def write_summary(out, df, wm, q):
     open(os.path.join(out, 'summary.md'), 'w').write('\n'.join(md))
 
 
-def write_params(out, clips, dets):
+def write_params(out, sel, emilia_csv, dets):
     def sh(c):
         try: return subprocess.check_output(c, cwd=REPO, text=True).strip()
         except Exception: return None
@@ -180,8 +244,9 @@ def write_params(out, clips, dets):
     p = dict(
         git_commit=sh(['git', 'rev-parse', 'HEAD']), slurm_job=os.environ.get('SLURM_JOB_ID'),
         date=datetime.datetime.now().isoformat(timespec='seconds'), host=platform.node(),
-        clips=[os.path.relpath(c, REPO) for c in clips], variants=VARIANTS,
-        sr_master=cl.SR_MASTER, detector_sr=cl.SR_16K, window_samples=D.WIN,
+        emilia_csv=emilia_csv, clips=sel[['clip_id', 'speaker', 'path']].to_dict('records'),
+        clip_filter=dict(n=N_CLIPS, seconds=SECONDS, dnsmos_min=DNSMOS_MIN, seed=SEED),
+        variants=VARIANTS, sr=SR, timbre_sr=cl.SR_MASTER, window_samples=D.WIN,
         threshold=THRESH, wm_detect_threshold=0.8,
         truth_bits=dict(audioseal=cl.AUDIOSEAL_BITS, aware=cl.AWARE_BITS),
         detectors=dict(AASIST='clovaai/aasist models/weights/AASIST.pth (ASVspoof2019 LA)',
