@@ -1,0 +1,279 @@
+{
+ "clip_id": "asv02",
+ "payload": "00110001110111011000",
+ "d_jnd": 708.387451171875,
+ "n_bands": 8,
+ "level_db": 65.0,
+ "arms": [
+  {
+   "name": "AWARE tol 6",
+   "family": "AWARE",
+   "dial": 6.0,
+   "quality": {
+    "pesq": 4.343286991119385,
+    "stoi": 0.9869221736358341,
+    "snr_db": 18.981324208164793,
+    "si_snr_db": 19.21215641189731
+   },
+   "A_mean": 6.2388596534729,
+   "A_p90": 8.069402885437011,
+   "A_max": 10.474609375,
+   "frac_at_range_cap": 0.0,
+   "embed_s": 10.609638690948486,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.5011872053146362,
+    "frac_capped": 0.0,
+    "E_ratio": 0.9999999904138153,
+    "max_rel_diff_vs_stock": 1.115119996129229e-07
+   }
+  },
+  {
+   "name": "AWARE tol 9",
+   "family": "AWARE",
+   "dial": 9.0,
+   "quality": {
+    "pesq": 4.543781280517578,
+    "stoi": 0.993641087062075,
+    "snr_db": 22.33214237042125,
+    "si_snr_db": 22.352593416107503
+   },
+   "A_mean": 4.884954929351807,
+   "A_p90": 6.683537960052489,
+   "A_max": 7.658140659332275,
+   "frac_at_range_cap": 0.0,
+   "embed_s": 7.751553535461426,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.3548133969306946,
+    "frac_capped": 0.0,
+    "E_ratio": 0.5011873071930173,
+    "max_rel_diff_vs_stock": 0.14637397845693653
+   }
+  },
+  {
+   "name": "AWARE tol 12",
+   "family": "AWARE",
+   "dial": 12.0,
+   "quality": {
+    "pesq": 4.620943069458008,
+    "stoi": 0.9965161573699839,
+    "snr_db": 25.47028296786875,
+    "si_snr_db": 25.606708574632293
+   },
+   "A_mean": 3.7818615436553955,
+   "A_p90": 5.082423877716064,
+   "A_max": 5.870158672332764,
+   "frac_at_range_cap": 0.0,
+   "embed_s": 7.806646108627319,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.25118863582611084,
+    "frac_capped": 0.0,
+    "E_ratio": 0.2511886544731873,
+    "max_rel_diff_vs_stock": 0.2499986799568755
+   }
+  },
+  {
+   "name": "AWARE tol 15",
+   "family": "AWARE",
+   "dial": 15.0,
+   "quality": {
+    "pesq": 4.639130115509033,
+    "stoi": 0.9980654038533767,
+    "snr_db": 27.56740815563765,
+    "si_snr_db": 28.362110400066708
+   },
+   "A_mean": 2.93620228767395,
+   "A_p90": 3.6281569480895994,
+   "A_max": 4.714494228363037,
+   "frac_at_range_cap": 0.0,
+   "embed_s": 7.818063020706177,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.17782793939113617,
+    "frac_capped": 0.0,
+    "E_ratio": 0.12589255191272591,
+    "max_rel_diff_vs_stock": 0.323359361490689
+   }
+  },
+  {
+   "name": "AWARE tol 18",
+   "family": "AWARE",
+   "dial": 18.0,
+   "quality": {
+    "pesq": 4.64148473739624,
+    "stoi": 0.998973566782638,
+    "snr_db": 30.928863534747563,
+    "si_snr_db": 31.009153776100092
+   },
+   "A_mean": 2.198770046234131,
+   "A_p90": 2.5970755100250242,
+   "A_max": 3.3596158027648926,
+   "frac_at_range_cap": 0.0,
+   "embed_s": 7.6680989265441895,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.1258925348520279,
+    "frac_capped": 0.0,
+    "E_ratio": 0.0630957346294584,
+    "max_rel_diff_vs_stock": 0.37529479583211967
+   }
+  },
+  {
+   "name": "CASP T 1",
+   "family": "CASP",
+   "dial": 1.0,
+   "quality": {
+    "pesq": 4.643147945404053,
+    "stoi": 0.9998959963564901,
+    "snr_db": 40.2640723738823,
+    "si_snr_db": 40.32775633664578
+   },
+   "A_mean": 1.491746425628662,
+   "A_p90": 1.7352678537368775,
+   "A_max": 1.8010755777359009,
+   "frac_at_range_cap": 0.0,
+   "embed_s": 7.842633247375488,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.08628454059362411,
+    "frac_capped": 0.0,
+    "E_ratio": 0.007168089941339146,
+    "max_rel_diff_vs_stock": 0.4879439537061648
+   }
+  },
+  {
+   "name": "CASP T 2",
+   "family": "CASP",
+   "dial": 2.0,
+   "quality": {
+    "pesq": 4.6367058753967285,
+    "stoi": 0.9993277135834941,
+    "snr_db": 32.27547248275448,
+    "si_snr_db": 32.47197260471958
+   },
+   "A_mean": 2.706763505935669,
+   "A_p90": 3.1499598026275635,
+   "A_max": 3.205105781555176,
+   "frac_at_range_cap": 0.23333333333333334,
+   "embed_s": 7.766091585159302,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.18129859864711761,
+    "frac_capped": 0.0,
+    "E_ratio": 0.045059603761043676,
+    "max_rel_diff_vs_stock": 0.4575898244758565
+   }
+  },
+  {
+   "name": "CASP T 4",
+   "family": "CASP",
+   "dial": 4.0,
+   "quality": {
+    "pesq": 4.626008033752441,
+    "stoi": 0.9968888192131092,
+    "snr_db": 25.959854940337294,
+    "si_snr_db": 25.97365615122772
+   },
+   "A_mean": 3.565836191177368,
+   "A_p90": 4.113938426971435,
+   "A_max": 5.376743793487549,
+   "frac_at_range_cap": 0.8833333333333333,
+   "embed_s": 7.698827028274536,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.2499999701976776,
+    "frac_capped": 0.0,
+    "E_ratio": 0.22757533254885062,
+    "max_rel_diff_vs_stock": 0.3874861813320268
+   }
+  },
+  {
+   "name": "CASP T 6",
+   "family": "CASP",
+   "dial": 6.0,
+   "quality": {
+    "pesq": 4.62551736831665,
+    "stoi": 0.9967079515101089,
+    "snr_db": 25.60080660720007,
+    "si_snr_db": 25.668610433747165
+   },
+   "A_mean": 3.716317653656006,
+   "A_p90": 4.514416790008545,
+   "A_max": 5.81577730178833,
+   "frac_at_range_cap": 0.975,
+   "embed_s": 7.735927104949951,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.2499999701976776,
+    "frac_capped": 0.0,
+    "E_ratio": 0.2483789258019442,
+    "max_rel_diff_vs_stock": 0.327843628002559
+   }
+  },
+  {
+   "name": "CASP T 8",
+   "family": "CASP",
+   "dial": 8.0,
+   "quality": {
+    "pesq": 4.626106262207031,
+    "stoi": 0.9964634972175198,
+    "snr_db": 24.8388024863264,
+    "si_snr_db": 25.69168966620805
+   },
+   "A_mean": 3.721633195877075,
+   "A_p90": 4.72975902557373,
+   "A_max": 6.059333801269531,
+   "frac_at_range_cap": 0.9916666666666667,
+   "embed_s": 7.793037176132202,
+   "budget": {
+    "kappa": 1.0,
+    "align_corr": 0.9999999999999968,
+    "n_freq": 193,
+    "n_frames": 240,
+    "eta_stock_median": 0.5011872053040903,
+    "eta_casp_median": 0.2499999701976776,
+    "frac_capped": 0.0,
+    "E_ratio": 0.24881671284584395,
+    "max_rel_diff_vs_stock": 0.26969381893495964
+   }
+  }
+ ]
+}
