@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=24g
+#SBATCH --mem=48g
 #SBATCH --time=03:00:00
 #SBATCH --array=0-4
 #SBATCH --output=ab_dial_%A_%a.log

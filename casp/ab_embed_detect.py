@@ -223,7 +223,9 @@ def mock_aware():
         Y = X.copy()
         Y[fi] = X[fi] / np.maximum(np.abs(X[fi]), 1e-12) * out
         det.last_bits = np.asarray(bits)
-        return psy.istft(Y, len(y)).astype("float32")
+        out = psy.istft(Y, len(y)).astype("float32")
+        short = int(os.environ.get("CASP_MOCK_SHORT", "0"))   # test: output shorter than input
+        return out[: len(out) - short]
 
     def detect(y, sr, detector):
         rng = np.random.RandomState(int(abs(y[:100]).sum() * 1e6) % 2 ** 31)

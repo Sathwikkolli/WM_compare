@@ -139,10 +139,18 @@ def main():
     casp = CASP(fs=SR, threads=a.threads)
     x_pa, gain = spl_scale(y_n, AB.LEVEL_DB)
     scale_n = 1.0 / max(float(np.max(np.abs(y))), 1e-9)
-    sig = [arm["z"] * scale_n * gain for arm in arms]
-    for i in range(0, len(arms), 5):
-        res = TH.audibility_blocks(casp, x_pa, sig[i:i + 5], blocks, d_jnd)
-        for arm, (A_blk, A_tot) in zip(arms[i:i + 5], res):
+    # AWARE's output can be a few samples shorter than the input (iSTFT framing);
+    # measure everything on the common prefix so host and marked signals line up.
+    L = min([len(y)] + [len(arm["z"]) for arm in arms])
+    if L < len(y):
+        print(f"  note: shortest AWARE output is {len(y) - L} samples shorter than the input; "
+              f"measuring audibility on the first {L}")
+    x_pa_m = x_pa[:L]
+    sig = [arm["z"][:L] * scale_n * gain for arm in arms]
+    CH = 3                                           # signals per CASP batch (memory)
+    for i in range(0, len(arms), CH):
+        res = TH.audibility_blocks(casp, x_pa_m, sig[i:i + CH], blocks, d_jnd)
+        for arm, (A_blk, A_tot) in zip(arms[i:i + CH], res):
             arm["A_mean"], arm["A_p90"], arm["A_max"] = float(A_blk.mean()), float(np.percentile(A_blk, 90)), float(A_blk.max())
             arm["A_blocks"] = A_blk
     for arm in arms:
@@ -183,8 +191,9 @@ def main():
     import soundfile as sf
     for nm, v in [("original", y), ("aware_tol6", ref["z"]), (near["name"].replace(" ", "_"), near["z"])]:
         sf.write(os.path.join(out, f"{nm}.wav"), np.clip(v, -1, 1), SR, subtype="PCM_16")
+    Ls = min(len(y), len(ref["z"]), len(near["z"]))
     AB.spectrogram_figure(os.path.join(out, "spectrograms.png"), f"{cid}  (AWARE tol 6 vs {near['name']})",
-                          y, ref["z"], near["z"])
+                          y[:Ls], ref["z"][:Ls], near["z"][:Ls])
     print(f"done [{time.time() - t0:.0f}s] -> {out}")
 
 
