@@ -136,10 +136,13 @@ class BudgetOverride:
         embedder._optimize = self._wrapped
         self.eta_fu = None
         self.host_M = None
+        self.fixed = False
         self.info = {}
 
-    def enable(self, eta_fu, host_M):
-        self.eta_fu, self.host_M = eta_fu, host_M
+    def enable(self, eta_fu, host_M, fixed=False):
+        """fixed=False: iso-energy (kappa-scaled, capped at 1) as in the first A/B run.
+        fixed=True : eta_fu is used exactly as given (clipped to [0,1]); no rescaling."""
+        self.eta_fu, self.host_M, self.fixed = eta_fu, host_M, fixed
 
     def disable(self):
         self.eta_fu = None
@@ -165,17 +168,21 @@ class BudgetOverride:
             raise RuntimeError(f"CASP map misaligned with AWARE STFT (profile corr {corr:.2f})")
         E_stock = float((((up - lo) / 2) ** 2).sum())
         kappa = 1.0
-        for _ in range(8):                                        # energy match, with the <=1 cap
+        if self.fixed:
+            e = np.clip(eta, 0.0, 1.0)
+        else:
+            for _ in range(8):                                    # energy match, with the <=1 cap
+                e = np.minimum(kappa * eta, 1.0)
+                E = float(((e * M) ** 2).sum())
+                kappa *= np.sqrt(E_stock / max(E, 1e-30))
             e = np.minimum(kappa * eta, 1.0)
-            E = float(((e * M) ** 2).sum())
-            kappa *= np.sqrt(E_stock / max(E, 1e-30))
-        e = np.minimum(kappa * eta, 1.0)
         new_lo, new_up = M * (1 - e), M * (1 + e)
         self.info = dict(kappa=float(kappa), align_corr=corr, n_freq=nf, n_frames=nu,
                          eta_stock_median=float(np.median(((up - lo) / 2)[M > 0] / M[M > 0])),
                          eta_casp_median=float(np.median(e[M > 0])),
                          frac_capped=float(np.mean(e >= 1.0 - 1e-9)),
-                         E_ratio=float(((e * M) ** 2).sum() / E_stock))
+                         E_ratio=float(((e * M) ** 2).sum() / E_stock),
+                         max_rel_diff_vs_stock=float(np.max(np.abs(M * (1 + e) - up) / np.maximum(M, 1e-9))))
         nb = [(float(a), float(b)) for a, b in zip(new_lo.ravel(), new_up.ravel())]
         return self.orig(initial_coeffs, stft_magnitude, watermark_pattern,
                          freq_indices, not_freq_indices, nb, stft_phase)
