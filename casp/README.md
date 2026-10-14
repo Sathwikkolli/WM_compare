@@ -62,3 +62,26 @@ Results: `results/2026-10-14_casp-threshold/` — `validation/` and one folder p
 - Adaptation uses only 0.30 s of left context per block (time constants go to 0.5 s).
 - `D_JND` rests on the assumed JND; sensitivity rows are in `validation.json`.
 - Random-sign stand-in, not AWARE's optimised perturbation.
+
+## A/B run: stock AWARE vs AWARE + CASP budget
+
+Same frozen AWARE detector and optimiser in both arms; only the per-coefficient
+bounds passed to `_optimize` differ (arm B: CASP shape rescaled to arm A's
+in-band energy, iso-energy). 5 clips x (clean + MP3 64/32 kbps + white noise
+20/10 dB SNR + low-pass 3.5/2.5 kHz), plus unwatermarked negatives.
+
+| File | Role |
+|---|---|
+| `ab_embed_detect.py` | one clip: both arms, attacks, detection, quality, spectrograms, wavs |
+| `ab_aggregate.py` | summary.md, robustness table, figures |
+| `ab_casp.sbatch` | Slurm array 0-4 |
+
+```bash
+cd $WM_COMPARE_BASE && git pull && cd casp
+python ab_embed_detect.py --make-clips     # login node, once
+sbatch ab_casp.sbatch
+python ab_aggregate.py                     # after the array finishes
+```
+
+`python ab_embed_detect.py --mock` runs the plumbing with a fake AWARE (no
+cluster needed). It cannot say anything about robustness.
