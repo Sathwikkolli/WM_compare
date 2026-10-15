@@ -78,7 +78,7 @@ def main():
                 continue
             for nm, s in S.items():
                 try:
-                    score, bits = s.detect(y2)
+                    score, bits = s.detect(y2, search=(cfg["family"] == "crop_head"))
                 except Exception as e:
                     score, bits = float("nan"), np.zeros(s.nbits, int)
                 w.writerow([cid, nm, cfg["family"], cfg["label"], cfg["sev"], f"{score:.5f}",

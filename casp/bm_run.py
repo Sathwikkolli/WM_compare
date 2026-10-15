@@ -178,7 +178,7 @@ def main():
             if y2 is None:
                 continue
             try:
-                score, bits = S[nm].detect(y2)
+                score, bits = S[nm].detect(y2, search=(cfg["family"] == "crop_head"))
             except Exception as e:
                 score, bits = float("nan"), None
                 print(f"  detect {nm} failed after {cfg['family']}/{cfg['label']}: {str(e)[:60]}")

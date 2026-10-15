@@ -292,16 +292,27 @@ class SSSys:
         m16 = SB.psy.istft(new * ph, len(y16)).astype(np.float32)
         return resample(m16, SR16, SR)
 
-    def detect(self, y22, **kw):
+    def detect(self, y22, search=False, **kw):
+        """search=True: try head-crop offsets 0 .. 2.5 s in 64-sample steps (16 kHz)
+        and keep the best; the p-value is Bonferroni-corrected for the number of
+        offsets, so the null stays calibrated. Used only for head-crop attacks."""
         from scipy.stats import chi2, norm
-        r = self.SB.whiten(resample(y22, SR, SR16), self.n16).ravel().astype(np.float32)
+        y16 = resample(y22, SR, SR16)
         K = self.nbits
-        sq = np.sqrt(r.size)
-        z = (self.bank.sig(K).reshape(K, -1) @ r) / sq
-        nz = (self.bank.null @ r) / sq
-        sd = float(nz.std() + 1e-12)
-        S = float(np.sum((z / sd) ** 2))
-        p = float(chi2.sf(S, K))
+        shifts = list(range(0, int(2.5 * SR16) + 1, 64)) if search else [0]
+        bank = self.bank.sig(K).reshape(K, -1)
+        best = None
+        for sh in shifts:
+            yy = np.concatenate([np.zeros(sh, np.float32), y16]) if sh else y16
+            r = self.SB.whiten(yy, self.n16).ravel().astype(np.float32)
+            sq = np.sqrt(r.size)
+            z = (bank @ r) / sq
+            sd = float((self.bank.null @ r / sq).std() + 1e-12)
+            S = float(np.sum((z / sd) ** 2))
+            if best is None or S > best[0]:
+                best = (S, z)
+        S, z = best
+        p = min(1.0, float(chi2.sf(S, K)) * len(shifts))
         self.last_p = p
         return float(norm.isf(max(p, 1e-300) / 2)), (z >= 0).astype(int)
 
@@ -390,6 +401,8 @@ def attack_configs(families=None, skip=("dac",)):
             order = list(range(len(grid)))
         for rank, i in enumerate(order):
             cfgs.append(dict(family=fam, label=grid[i][0], param=grid[i][1], sev=rank, src="extra"))
+    # libopus rejects 496 kbps in ffmpeg (selftest: no rows); 256k is the practical top.
+    cfgs = [c for c in cfgs if not (c["family"] == "vox_opus" and float(c["param"]) > 300)]
     if families:
         cfgs = [c for c in cfgs if c["family"] in families]
     return [c for c in cfgs if c["family"] not in skip] if not families else cfgs
