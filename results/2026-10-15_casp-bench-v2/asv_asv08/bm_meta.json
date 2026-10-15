@@ -1,0 +1,43 @@
+{
+ "dataset": "asv",
+ "clip_id": "asv08",
+ "key": 3013,
+ "shipped_pesq": 4.1281914710998535,
+ "systems": {
+  "audioseal": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625
+  },
+  "aware": {
+   "nbits": 20,
+   "k_threshold": 16,
+   "fpr": 0.005908966064453125
+  },
+  "timbre": {
+   "nbits": 10,
+   "k_threshold": 9,
+   "fpr": 0.0107421875
+  },
+  "ss": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625
+  },
+  "ss_casp": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625
+  },
+  "ss_shuf_all": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625
+  },
+  "ss_shuf_time": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625
+  }
+ }
+}
