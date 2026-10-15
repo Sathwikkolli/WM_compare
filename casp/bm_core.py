@@ -141,7 +141,7 @@ def asv_clips(n=20):
 def emilia_clips(n, seed=0, skip=0):
     import null_test as NT           # cascade/null_test.py
     paths = NT.emilia_paths(n + skip, min_dur=MAX_S, seed=seed)[skip:skip + n]
-    return [(f"emilia{seed}_{i:03d}", p) for i, p in enumerate(paths)]
+    return [(f"emilia{seed}_{skip + i:03d}", p) for i, p in enumerate(paths)]
 
 
 # --------------------------------------------------------------------------- #
@@ -163,8 +163,13 @@ class SSBank:
         return self._sig[K]
 
 
-def casp_eta(clip_id, shape_fu):
-    """CASP tolerance map (F,U) for a clip from its probe.npz, or None."""
+def casp_eta(clip_id, shape_fu, shuffle=None, seed=0):
+    """CASP tolerance map (F,U) for a clip from its probe.npz, or None.
+    shuffle=None  : the real map.
+    shuffle="all" : the same (band, block) values permuted across ALL patches
+                    (keeps the value distribution, destroys where they sit).
+    shuffle="time": block order permuted, same permutation in every band
+                    (keeps each band's average level, breaks alignment with the audio)."""
     p = os.path.join(CASP_RESULTS, clip_id, "probe.npz")
     if not os.path.exists(p):
         return None
@@ -173,6 +178,14 @@ def casp_eta(clip_id, shape_fu):
     bands = [tuple(b) for b in z["bands"]]
     blocks = [tuple(b) for b in z["blocks"]]
     eta_kb, _ = TH.solve_eta(z["D"], z["etas"], 1.0 * float(z["d_jnd"]) / np.sqrt(len(bands)))
+    if shuffle:
+        rng = np.random.RandomState(int(seed))
+        if shuffle == "all":
+            eta_kb = rng.permutation(eta_kb.ravel()).reshape(eta_kb.shape)
+        elif shuffle == "time":
+            eta_kb = eta_kb[rng.permutation(eta_kb.shape[0])]
+        else:
+            raise ValueError(shuffle)
     return TH.eta_map(eta_kb, bands, blocks, shape_fu)
 
 
@@ -259,7 +272,8 @@ class SSSys:
     def __init__(self, shape="aware_shape", K=16, n_null=200):
         import sb_embed as SB
         self.SB, self.shape_name, self.nbits, self.n_null = SB, shape, K, n_null
-        self.name = {"aware_shape": "SS", "casp": "SS-CASP", "flat_abs": "SS-flat"}[shape]
+        self.name = {"aware_shape": "SS", "casp": "SS-CASP", "flat_abs": "SS-flat",
+                     "casp_shuf_all": "SS-CASP-shuf-all", "casp_shuf_time": "SS-CASP-shuf-time"}[shape]
         self.fi = SB.band_idx()
 
     def prepare(self, host22, key, clip_id=None):
@@ -269,8 +283,9 @@ class SSSys:
         self.bank = SSBank((len(self.fi), U), key, self.n_null)
         self.key = key
         self.clip_id = clip_id
-        if self.shape_name == "casp":
-            eta = casp_eta(clip_id, (self.SB.psy.stft(y16).shape))
+        if self.shape_name.startswith("casp"):
+            mode = {"casp": None, "casp_shuf_all": "all", "casp_shuf_time": "time"}[self.shape_name]
+            eta = casp_eta(clip_id, (self.SB.psy.stft(y16).shape), shuffle=mode, seed=int(key) + 17)
             if eta is None:
                 return False
             self.eta = eta
@@ -281,7 +296,8 @@ class SSSys:
         y16 = resample(y22, SR, SR16)
         X = SB.psy.stft(y16)
         M = np.abs(X)
-        W = SB.shape_map(self.shape_name, M, getattr(self, "eta", None))
+        arm = "casp" if self.shape_name.startswith("casp") else self.shape_name
+        W = SB.shape_map(arm, M, getattr(self, "eta", None))
         A, _ = SB.amplitude_map(W, M, SB.reference_energy(M))
         bits_pm = (2 * np.asarray(bits, np.float32) - 1)
         K = len(bits_pm)
@@ -408,12 +424,20 @@ def attack_configs(families=None, skip=("dac",)):
     return [c for c in cfgs if c["family"] not in skip] if not families else cfgs
 
 
-def run_attack(cfg, y22):
-    """Returns attacked audio at the master rate, or None if unavailable."""
+def run_attack(cfg, y22, requantize=True):
+    """Returns attacked audio at the master rate, or None if unavailable.
+    requantize=True saves the result as 16-bit PCM, like a real file. Without it
+    a filter's stopband (-100 dB and below) stays intact in floating point, and
+    a detector working on RELATIVE log-magnitudes (our SS) is invariant to any
+    linear filter, which is not what a real file would give."""
     if cfg["src"] == "vox":
         import vox_attacks as V
-        return V.apply(cfg["family"].replace("vox_", "", 1), cfg["param"], y22, SR)
-    return apply_extra(cfg["family"], cfg["param"], y22)
+        out = V.apply(cfg["family"].replace("vox_", "", 1), cfg["param"], y22, SR)
+    else:
+        out = apply_extra(cfg["family"], cfg["param"], y22)
+    if out is None:
+        return None
+    return pcm16(out) if requantize else np.asarray(out, dtype=np.float32)
 
 
 # --------------------------------------------------------------------------- #

@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import bm_core as B                       # noqa: E402
 
-RUN = os.environ.get("CASP_BENCH_RUN", "2026-10-14_casp-bench")
+RUN = os.environ.get("CASP_BENCH_RUN", "2026-10-15_casp-bench-v2")
 RESULTS = os.path.join(B.ROOT, "results", RUN)
 HEADER = ["dataset", "clip_id", "system", "op", "target", "scale", "status", "pesq", "stoi", "snr_db",
           "family", "label", "sev", "native_score", "bit_acc", "n_bits", "k_ok", "bits_ok", "bits", "payload"]
@@ -49,6 +49,10 @@ def build_systems(names, mock=False):
                 S[n] = B.SSSys("casp", K=16)
             elif n == "ss_flat":
                 S[n] = B.SSSys("flat_abs", K=16)
+            elif n == "ss_shuf_all":
+                S[n] = B.SSSys("casp_shuf_all", K=16)
+            elif n == "ss_shuf_time":
+                S[n] = B.SSSys("casp_shuf_time", K=16)
             else:
                 print(f"  unknown system {n}")
         except Exception as e:
@@ -75,7 +79,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset", default="asv", choices=["asv", "emilia"])
     ap.add_argument("--index", type=int, default=int(os.environ.get("SLURM_ARRAY_TASK_ID", 0)))
-    ap.add_argument("--systems", default="audioseal,aware,timbre,ss,ss_casp")
+    ap.add_argument("--systems", default="audioseal,aware,timbre,ss,ss_casp,ss_shuf_all,ss_shuf_time")
     ap.add_argument("--targets", default="4.2", help="comma list of PESQ targets for the matched op")
     ap.add_argument("--families", default="", help="comma list; default = all except dac")
     ap.add_argument("--selftest", action="store_true")

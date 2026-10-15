@@ -16,7 +16,7 @@ export WM_COMPARE_BASE=${WM_COMPARE_BASE:-$HOME/wm_compare}
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export TORCHDYNAMO_DISABLE=1 TORCH_COMPILE_DISABLE=1
-export CASP_BENCH_RUN=${CASP_BENCH_RUN:-2026-10-14_casp-bench}
+export CASP_BENCH_RUN=${CASP_BENCH_RUN:-2026-10-15_casp-bench-v2}
 
 eval "$(conda shell.bash hook)"
 conda activate wmcompare

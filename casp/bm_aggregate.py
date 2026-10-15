@@ -18,11 +18,12 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-RUN = os.environ.get("CASP_BENCH_RUN", "2026-10-14_casp-bench")
+RUN = os.environ.get("CASP_BENCH_RUN", "2026-10-15_casp-bench-v2")
 RESULTS = os.environ.get("CASP_BENCH_DIR", os.path.join(ROOT, "results", RUN))
-SYS_ORDER = ["audioseal", "aware", "timbre", "ss", "ss_casp"]
+SYS_ORDER = ["audioseal", "aware", "timbre", "ss", "ss_casp", "ss_shuf_all", "ss_shuf_time"]
 LABEL = {"audioseal": "AudioSeal", "aware": "AWARE", "timbre": "Timbre", "ss": "SS (AWARE shape)",
-         "ss_casp": "SS (CASP shape)", "ss_flat": "SS (flat)"}
+         "ss_casp": "SS (CASP shape)", "ss_flat": "SS (flat)",
+         "ss_shuf_all": "SS (CASP shuffled, all)", "ss_shuf_time": "SS (CASP shuffled, time)"}
 KEY_FAMS = ["lp_hz", "vox_encodec", "vox_gaussian_noise", "vox_mp3", "vox_opus", "requant", "notch_worst",
             "vox_time_stretch", "resample"]
 
@@ -43,6 +44,7 @@ def load():
         raise SystemExit(f"no bm_rows.csv under {RESULTS}")
     R = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     R["bits_ok"] = pd.to_numeric(R.bits_ok, errors="coerce")
+    R["target"] = R.target.apply(lambda v: "" if pd.isna(v) else f"{float(v):g}")
     nfiles = sorted(glob.glob(os.path.join(RESULTS, "null", "null_chunk*.csv")))
     N = pd.concat([pd.read_csv(f, dtype={"bits": str}) for f in nfiles], ignore_index=True) if nfiles else None
     return R, N
@@ -122,7 +124,7 @@ def main():
     # TPR by family
     body = R[~R.family.isin(["none"])]
     for op, tgt in ops:
-        sub = body[(body.op == op) & (body.target.astype(str) == tgt)]
+        sub = body[(body.op == op) & (body.target == tgt)]
         if sub.empty:
             continue
         t = (sub.groupby(["family", "system"]).bits_ok.mean().unstack("system").reindex(columns=syss))
@@ -144,7 +146,7 @@ def main():
     # breaking points
     bp = []
     for op, tgt in ops:
-        sub = body[(body.op == op) & (body.target.astype(str) == tgt)]
+        sub = body[(body.op == op) & (body.target == tgt)]
         for (fam, s), g in sub.groupby(["family", "system"]):
             c = g.groupby(["sev", "label"]).bits_ok.mean().reset_index().sort_values("sev")
             bad = c[c.bits_ok < 0.5]
@@ -157,7 +159,7 @@ def main():
     # paired differences SS vs each neural (per clip mean over all attacks)
     pr = []
     for op, tgt in ops:
-        sub = body[(body.op == op) & (body.target.astype(str) == tgt)]
+        sub = body[(body.op == op) & (body.target == tgt)]
         pc = sub.groupby(["dataset", "clip_id", "system"]).bits_ok.mean().unstack("system")
         for base in ("audioseal", "aware", "timbre"):
             if "ss" in pc and base in pc:
@@ -171,6 +173,42 @@ def main():
     if pr:
         L += ["## SS minus each neural system, mean TPR over all attacks (bootstrap 95% over clips)\n",
               md(pd.DataFrame(pr), "{:+.3f}"), ""]
+
+    # CASP shape vs its controls (paired over clips that have a CASP map)
+    def _boot(v, n=2000, seed=0):
+        v = np.asarray(v, dtype=float)
+        v = v[~np.isnan(v)]
+        if len(v) < 3:
+            return float("nan"), float("nan"), float("nan"), len(v)
+        rng = np.random.RandomState(seed)
+        m = [rng.choice(v, len(v)).mean() for _ in range(n)]
+        return float(v.mean()), float(np.percentile(m, 2.5)), float(np.percentile(m, 97.5)), len(v)
+
+    ctrl_rows, fam_rows = [], []
+    for op, tgt in ops:
+        sub = body[(body.op == op) & (body.target == tgt)]
+        have = set(sub.system.unique())
+        for other in ("ss", "ss_shuf_all", "ss_shuf_time"):
+            if "ss_casp" not in have or other not in have:
+                continue
+            cl = sub[sub.system.isin(["ss_casp", other])].groupby(["clip_id", "system"]).bits_ok.mean().unstack("system")
+            m, lo, hi, n = _boot(cl["ss_casp"] - cl[other])
+            ctrl_rows.append(dict(op=f"{op} {tgt}", control=LABEL[other], diff=m, ci_lo=lo, ci_hi=hi,
+                                  clips_casp_better=int(((cl["ss_casp"] - cl[other]) > 0).sum()), n=n))
+            if op == "match":
+                pf = sub[sub.system.isin(["ss_casp", other])].groupby(["clip_id", "family", "system"]).bits_ok.mean().unstack("system")
+                for fam, g in pf.groupby("family"):
+                    m, lo, hi, n = _boot(g["ss_casp"] - g[other])
+                    if n >= 3 and (lo > 0 or hi < 0):
+                        fam_rows.append(dict(control=LABEL[other], family=fam, diff=m, ci_lo=lo, ci_hi=hi, n=n))
+    if ctrl_rows:
+        L += ["## Is it CASP's map? SS (CASP shape) minus each control, mean TPR over all attacks (paired, bootstrap 95%)\n",
+              "Positive = the real CASP map is better than the control. A shuffled control that matches CASP means "
+              "only the unevenness of the shape matters, not where CASP puts it.\n",
+              md(pd.DataFrame(ctrl_rows), "{:+.3f}"), ""]
+    if fam_rows:
+        L += ["### Attack families where CASP differs from a control with a 95% interval excluding 0 (matched point)\n",
+              md(pd.DataFrame(fam_rows), "{:+.3f}"), ""]
 
     fp = null_payload_fpr(N, nbits, kmap)
     if fp is not None and len(fp):
@@ -192,7 +230,7 @@ def main():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     for op, tgt in ops:
-        sub = body[(body.op == op) & (body.target.astype(str) == tgt)]
+        sub = body[(body.op == op) & (body.target == tgt)]
         if sub.empty:
             continue
         h = sub.groupby(["family", "system"]).bits_ok.mean().unstack("system").reindex(columns=syss)
