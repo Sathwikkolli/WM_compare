@@ -31,8 +31,12 @@ def load():
     files = sorted(glob.glob(os.path.join(RESULTS, "*", "rows.csv")))
     if not files:
         raise SystemExit(f"no rows.csv under {RESULTS}")
-    df = pd.concat([pd.read_csv(f, dtype={"bits": str, "payload": str, "target": str}) for f in files],
+    # keep_default_na=False: pandas would otherwise read op "null" as a missing value.
+    df = pd.concat([pd.read_csv(f, dtype={"bits": str, "payload": str, "target": str},
+                                keep_default_na=False, na_values=["", "nan", "NaN"]) for f in files],
                    ignore_index=True)
+    if df["op"].isna().any():
+        raise SystemExit(f"{int(df['op'].isna().sum())} rows have no op; check the CSV parsing")
     df["target"] = df["target"].fillna("")
     df["system"] = df["system"].map(NAMES).fillna(df["system"])
     df["op_t"] = np.where(df["target"] != "", df["op"] + "@" + df["target"], df["op"])
