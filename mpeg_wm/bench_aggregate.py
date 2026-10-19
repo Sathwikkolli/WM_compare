@@ -3,7 +3,11 @@ mpeg_wm/bench_aggregate.py -- collect results/<run>/<clip>/rows.csv into tables 
 
     python bench_aggregate.py            # after the sbatch array finishes
 
-Writes into results/<run>/:
+    # several runs merged into one report (e.g. the CASP run + the earlier 4-system run):
+    MPEG_BENCH_RUN=2026-10-20_casp-vox-bench,2026-10-19_mpeg-vox-bench \
+    MPEG_BENCH_OUT=2026-10-20_casp-vox-bench python bench_aggregate.py
+
+Writes into results/<out> (default: the first run):
     all_rows.csv.gz     every row from every clip
     by_config.csv       mean bit accuracy / detection rate per (system, op, attack config)
     by_family.csv       the same, pooled over each attack family's strengths
@@ -21,16 +25,22 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-RUN = os.environ.get("MPEG_BENCH_RUN", "2026-10-19_mpeg-vox-bench")
+RUNS = [r for r in os.environ.get("MPEG_BENCH_RUN", "2026-10-19_mpeg-vox-bench").split(",") if r]
+RUN = os.environ.get("MPEG_BENCH_OUT", RUNS[0])
 RESULTS = os.path.join(ROOT, "results", RUN)
-ORDER = ["MPEG", "AudioSeal", "AWARE", "Timbre"]
-NAMES = {"mpeg": "MPEG", "audioseal": "AudioSeal", "aware": "AWARE", "timbre": "Timbre"}
+ORDER = ["MPEG", "CASP-1", "CASP-1-shuf", "CASP-2", "CASP-2-shuf", "AudioSeal", "AWARE", "Timbre"]
+NAMES = {"mpeg": "MPEG", "audioseal": "AudioSeal", "aware": "AWARE", "timbre": "Timbre",
+         "casp1": "CASP-1", "casp1_shuf": "CASP-1-shuf", "casp2": "CASP-2", "casp2_shuf": "CASP-2-shuf"}
+# (system, compared with): is CASP's placement better than MPEG's, and than random placement?
+PAIRS = [("CASP-1", "MPEG"), ("CASP-2", "MPEG"), ("CASP-1", "CASP-1-shuf"),
+         ("CASP-2", "CASP-2-shuf"), ("CASP-1", "CASP-2")]
 
 
 def load():
-    files = sorted(glob.glob(os.path.join(RESULTS, "*", "rows.csv")))
+    files = sorted(f for r in RUNS for f in glob.glob(os.path.join(ROOT, "results", r, "*", "rows.csv")))
     if not files:
-        raise SystemExit(f"no rows.csv under {RESULTS}")
+        raise SystemExit(f"no rows.csv under results/{{{','.join(RUNS)}}}")
+    os.makedirs(RESULTS, exist_ok=True)
     # keep_default_na=False: pandas would otherwise read op "null" as a missing value.
     df = pd.concat([pd.read_csv(f, dtype={"bits": str, "payload": str, "target": str},
                                 keep_default_na=False, na_values=["", "nan", "NaN"]) for f in files],
@@ -41,7 +51,49 @@ def load():
     df["system"] = df["system"].map(NAMES).fillna(df["system"])
     df["op_t"] = np.where(df["target"] != "", df["op"] + "@" + df["target"], df["op"])
     df["config"] = df["family"].str.replace("vox_", "", regex=False) + " " + df["label"].astype(str)
-    return df, len(files)
+    return df, df["clip_id"].nunique()
+
+
+def bootstrap_diff(per_clip_a, per_clip_b, n_boot=4000, seed=0):
+    """Paired difference of per-clip means, with a 95% bootstrap interval over clips."""
+    common = per_clip_a.index.intersection(per_clip_b.index)
+    d = (per_clip_a[common] - per_clip_b[common]).to_numpy()
+    if len(d) == 0:
+        return None
+    rng = np.random.default_rng(seed)
+    boots = rng.choice(d, size=(n_boot, len(d))).mean(axis=1)
+    return dict(diff=d.mean(), lo=np.percentile(boots, 2.5), hi=np.percentile(boots, 97.5),
+                a_better=int((d > 0).sum()), n=len(d))
+
+
+def paired_tables(df, ops):
+    """Detection over all attacks, and PESQ, for each PAIR, paired by clip."""
+    att = df[(df["family"] != "none") & (df["op"] != "null")]
+    clean = df[(df["family"] == "none") & (df["op"] != "null")]
+    rows, fam_rows = [], []
+    for op in ops:
+        for a, b in PAIRS:
+            pa = att[(att["system"] == a) & (att["op_t"] == op)]
+            pb = att[(att["system"] == b) & (att["op_t"] == op)]
+            if pa.empty or pb.empty:
+                continue
+            r = bootstrap_diff(pa.groupby("clip_id")["bits_ok"].mean(), pb.groupby("clip_id")["bits_ok"].mean())
+            qa = clean[(clean["system"] == a) & (clean["op_t"] == op)].set_index("clip_id")["pesq"]
+            qb = clean[(clean["system"] == b) & (clean["op_t"] == op)].set_index("clip_id")["pesq"]
+            rq = bootstrap_diff(qa, qb)
+            rows.append({"op": op, "system": a, "versus": b,
+                         "detect_diff": r["diff"], "ci": f"[{r['lo']:+.3f}, {r['hi']:+.3f}]",
+                         "clips_better": f"{r['a_better']}/{r['n']}",
+                         "pesq_diff": rq["diff"] if rq else np.nan,
+                         "pesq_ci": f"[{rq['lo']:+.3f}, {rq['hi']:+.3f}]" if rq else ""})
+            for fam in sorted(pa["family"].unique()):
+                rf = bootstrap_diff(pa[pa["family"] == fam].groupby("clip_id")["bits_ok"].mean(),
+                                    pb[pb["family"] == fam].groupby("clip_id")["bits_ok"].mean())
+                if rf and (rf["lo"] > 0 or rf["hi"] < 0):
+                    fam_rows.append({"op": op, "system": a, "versus": b,
+                                     "family": fam.replace("vox_", ""), "detect_diff": rf["diff"],
+                                     "ci": f"[{rf['lo']:+.3f}, {rf['hi']:+.3f}]"})
+    return pd.DataFrame(rows), pd.DataFrame(fam_rows)
 
 
 def table(df, keys):
@@ -98,7 +150,7 @@ def family_bars(bf, op, path):
     ax.set_ylabel("payload detected (binomial ~1% FPR test)")
     ax.set_ylim(0, 1.02)
     ax.set_title(f"Detection rate per attack family, op = {op}")
-    ax.legend(ncol=4, fontsize=8)
+    ax.legend(ncol=8, fontsize=7)
     plt.tight_layout()
     plt.savefig(path, dpi=130)
     plt.close()
@@ -135,12 +187,22 @@ def main():
     ops = [o for o in ["ship"] + sorted(o for o in df["op_t"].unique() if o.startswith("match"))
            if o in set(df["op_t"])]
     lines = [f"# MPEG-masking watermark vs AudioSeal / AWARE / Timbre on VoxWatermark attacks",
-             "", f"Run `{RUN}`: **{n_clips}** bona fide ASVspoof2019 LA eval clips (5 s crops), "
+             "", f"Runs {', '.join(f'`{r}`' for r in RUNS)}: **{n_clips}** bona fide ASVspoof2019 LA eval clips (5 s crops), "
              f"{att['config'].nunique()} attack configs from {att['family'].nunique()} VoxWatermark families.",
              "", "Detection = payload test: at least k of n bits correct, k chosen so a random "
              "payload passes with ~1% probability.", "", md(k[["system", "rule"]]), "",
              "## Quality and clean decoding", "", md(q), "",
              "## False alarms (unwatermarked clips, decoded against the clip's payload)", "", md(fa), ""]
+    pt, pf = paired_tables(df, ops)
+    if not pt.empty:
+        lines += ["## Paired comparisons (by clip, 95% bootstrap interval)", "",
+                  "`detect_diff`: detection rate over all attack configs, system minus `versus`. "
+                  "`pesq_diff`: PESQ of the clean watermarked clip. At `ship` the CASP systems "
+                  "have exactly MPEG's watermark energy, so any difference there is placement.", "",
+                  md(pt), ""]
+        if not pf.empty:
+            lines += ["### Attack families where the interval excludes 0", "", md(pf), ""]
+        pt.to_csv(os.path.join(RESULTS, "paired.csv"), index=False)
     for op in ops:
         piv_acc = bf[bf["op_t"] == op].pivot_table(index="family", columns="system", values="bit_acc", sort=False)
         piv_det = bf[bf["op_t"] == op].pivot_table(index="family", columns="system", values="detect", sort=False)

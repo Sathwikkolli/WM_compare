@@ -60,6 +60,69 @@ Results go to `results/2026-10-19_mpeg-vox-bench/` (override with
 `MPEG_BENCH_RUN`). Listening wavs (host plus every system's ship and match
 versions) go to `mpeg_wm/work/<run>/<clip>/`, which is gitignored.
 
+## CASP placement: CASP decides where, MPEG decides how much
+
+`casp_model.py` is the revised CASP model (Paulick, Relaño-Iborra & Dau, JASA
+157:3232, 2025), written from the paper and the papers it cites. It runs one
+function per stage:
+
+| Stage | Function |
+|---|---|
+| Pascals, full scale = 96 dB SPL | `to_pascals` |
+| 53 channels, 250 Hz–8 kHz, 2 per ERB | `erb_channels` |
+| outer/middle ear (Lopez-Poveda & Meddis 2001) | `outer_middle_ear` |
+| DRNL cochlea | `gammatone`, `drnl_params`, `broken_stick`, `drnl` |
+| nonlinear inner hair cell | `met_conductance`, `inner_hair_cell` |
+| adaptation loops, per-channel floors from ISO 389-7 | `adaptation_min_levels`, `adaptation` |
+| modulation filterbank | `modulation_filterbank` |
+| whole model | `internal_representation` |
+| decision stage | `ir_distance`, `dprime` |
+| calibration (1 kHz, 60 dB, 1 dB step = d′ 1) | `calibration_distance`, `check_calibration` |
+
+**Where it differs from the vendored `casp/vendor/torch_amt` port.** We follow
+the paper in each case:
+- the channel grid;
+- the ear filter;
+- the DRNL linear-path exponents;
+- holding the compressor constant above 1.5 kHz as `min(CF, 1500)`, where the
+  port jumps at 1 kHz;
+- the order of the two terms in the Boltzmann function (Eq. 1);
+- the modulation limit, which is 1000 Hz rather than 150 Hz.
+
+The potassium reversal potentials are printed without a sign in Table I; we use
+−71 and −78 mV.
+
+`casp_place.py` keeps the MPEG watermark's total energy for the clip and lets
+CASP move it between tiles. Tiles are 12 ERB bands across 250 Hz–8 kHz × 128 ms.
+Each round:
+1. synthesise the watermark;
+2. run CASP once on host + watermark, giving a d′ per tile;
+3. turn tiles towards equal audibility;
+4. rescale to MPEG's energy.
+
+The two ways and their controls:
+
+| System | Starting point | Rounds |
+|---|---|---|
+| CASP-1 | the MPEG watermark (mask + envelope) | 4, step 1 |
+| CASP-2 | flat noise, 250 Hz–8 kHz | 6, step 3 |
+| CASP-1-shuf / CASP-2-shuf | partner's final tile gains, permuted across tiles | — |
+
+The shuffled versions keep how uneven the map is but destroy where CASP put the
+energy. The payload layout, key and blind detector are MPEG's (`detect.decode`).
+
+```bash
+python test_casp.py                                        # model + placement tests
+sbatch --array=0-119%30 bench_casp.sbatch                  # results/2026-10-20_casp-vox-bench/
+MPEG_BENCH_RUN=2026-10-20_casp-vox-bench,2026-10-19_mpeg-vox-bench \
+MPEG_BENCH_OUT=2026-10-20_casp-vox-bench python bench_aggregate.py
+```
+
+The merged `summary.md` includes paired, clip-by-clip comparisons: CASP-x vs
+MPEG, CASP-x vs its shuffled control, and CASP-1 vs CASP-2. Each comparison
+reports the detection rate and PESQ with bootstrap intervals. At `ship` all
+CASP systems carry exactly MPEG's energy, so any difference there is placement.
+
 ## Operating points
 
 - **ship**: every system at its default strength. MPEG puts the watermark at

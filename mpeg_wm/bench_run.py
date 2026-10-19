@@ -8,6 +8,10 @@ Systems (random payload per clip):
     AudioSeal 16 bit, AWARE 20 bit, Timbre 10 bit   -- adapters from casp/bm_core.py
     MPEG      16 bit                                -- this folder (Swanson et al. masking,
                                                        blind multibit spread spectrum)
+    CASP-1, CASP-2 (+ "-shuf" controls), 16 bit     -- casp_place.py: CASP decides where,
+                                                       MPEG's energy decides how much
+    e.g. --systems casp1,casp1_shuf,casp2,casp2_shuf  (each "_shuf" reuses its partner's
+    tile gains for the clip, so list the partner first)
 Operating points:
     ship   every system at its own default strength (MPEG: watermark at the mask, 0 dB)
     match  every system rescaled to PESQ-wb = target (default 4.2), residual scaling
@@ -54,12 +58,15 @@ class MpegSys:
         self.strength_db = float(strength_db)
         self.key = 0
 
-    def prepare(self, key):
+    def prepare(self, key, clip_id=None):
         self.key = int(key)
+
+    def _embed16(self, y16, bits):
+        return E.embed_watermark(y16, bits, self.key, strength_db=self.strength_db)
 
     def embed(self, y22, bits, **kw):
         y16 = B.resample(y22, B.SR, B.SR16)
-        m16 = E.embed_watermark(y16, bits, self.key, strength_db=self.strength_db)
+        m16 = self._embed16(y16, bits)
         res = B.fit_len(B.resample(m16 - y16, B.SR16, B.SR), len(y22))
         return (np.asarray(y22, np.float32) + res).astype(np.float32)
 
@@ -69,12 +76,44 @@ class MpegSys:
         return float(norm.isf(max(p, 1e-300) / 2)), bits
 
 
+class CaspSys(MpegSys):
+    """MPEG's watermark energy, CASP's placement (casp_place.py). Same key, PN, payload
+    layout and blind detector as MPEG. `shared` carries the tile gains from the real
+    system to its shuffled control for the same clip, so CASP runs only once per way."""
+    has_score = True
+
+    def __init__(self, way, shuffle, shared):
+        super().__init__(0.0)
+        self.way, self.shuffle, self.shared = way, shuffle, shared
+        self.name = f"CASP-{way}" + ("-shuf" if shuffle else "")
+        self.info = {}
+
+    def prepare(self, key, clip_id=None):
+        self.key, self.clip_id = int(key), clip_id
+
+    def _embed16(self, y16, bits):
+        import casp_place as CP
+        cached = self.shared.get((self.clip_id, self.way))
+        m16, info = CP.embed_casp(y16, bits, self.key, way=self.way, shuffle=self.shuffle,
+                                  gain_db=cached)
+        if cached is None:
+            self.shared[(self.clip_id, self.way)] = info["gain_db"]
+        g = info["gain_db"]
+        self.info = dict(way=self.way, shuffle=self.shuffle, reused_gains=cached is not None,
+                         gain_db_min=float(g.min()), gain_db_max=float(g.max()),
+                         casp_dprime_history=[h["d_total"] for h in info.get("history", [])])
+        return m16
+
+
 def build_systems(names, strength_db):
-    S = {}
+    S, shared = {}, {}
+    makers = {"audioseal": B.AudioSealSys, "aware": B.AwareSys, "timbre": B.TimbreSys,
+              "mpeg": lambda: MpegSys(strength_db),
+              "casp1": lambda: CaspSys(1, False, shared), "casp1_shuf": lambda: CaspSys(1, True, shared),
+              "casp2": lambda: CaspSys(2, False, shared), "casp2_shuf": lambda: CaspSys(2, True, shared)}
     for n in names:
         try:
-            S[n] = {"audioseal": B.AudioSealSys, "aware": B.AwareSys, "timbre": B.TimbreSys,
-                    "mpeg": lambda: MpegSys(strength_db)}[n]()
+            S[n] = makers[n]()
         except Exception as e:
             print(f"  ! system {n} failed to load: {e}")
             traceback.print_exc()
@@ -119,8 +158,9 @@ def main():
 
     # ---- embed: random payload per (clip, system) ----------------------------------
     rng = np.random.RandomState(a.index)
-    if "mpeg" in S:
-        S["mpeg"].prepare(5000 + a.index)
+    for nm, s in S.items():
+        if isinstance(s, MpegSys):                    # MPEG and the CASP systems share one key
+            s.prepare(5000 + a.index, cid)
     marked, payloads = {}, {}
     for nm, s in S.items():
         payloads[nm] = rng.randint(0, 2, s.nbits)
@@ -210,7 +250,8 @@ def main():
     json.dump(dict(clip_id=cid, utt=utt, speaker=spec.get("speaker"), path=spec["path"],
                    mpeg_key=5000 + a.index, mpeg_strength_db=a.strength_db, targets=targets,
                    systems={nm: dict(nbits=int(S[nm].nbits), k_threshold=int(kth[nm]),
-                                     fpr=B.binom_tail(int(S[nm].nbits), int(kth[nm])))
+                                     fpr=B.binom_tail(int(S[nm].nbits), int(kth[nm])),
+                                     **getattr(S[nm], "info", {}))
                             for nm in S}),
               open(os.path.join(out_dir, "meta.json"), "w"), indent=1)
     print(f"done [{time.time() - t0:.0f}s] -> {out_dir}", flush=True)
