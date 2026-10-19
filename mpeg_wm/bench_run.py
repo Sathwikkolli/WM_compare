@@ -42,6 +42,7 @@ CLIPS_JSON = os.path.join(HERE, "clips120.json")
 HEADER = ["clip_id", "utt", "system", "op", "target", "scale", "status", "pesq", "stoi", "snr_db",
           "family", "label", "sev", "native_score", "bit_acc", "n_bits", "k_ok", "bits_ok",
           "bits", "payload"]
+UNSET = object()                             # sentinel: "not computed yet" (None means "attack unavailable")
 
 
 class MpegSys:
@@ -181,9 +182,9 @@ def main():
 
     all_cfgs = [dict(family="none", label="clean", param=None, sev=-1, src="none")] + cfgs
     for i, cfg in enumerate(all_cfgs):
-        null_attacked = "unset"                          # the host is attacked once, shared by all systems
+        null_attacked = UNSET                            # the host is attacked once, shared by all systems
         for (nm, op, tg), (z, s, st, q) in sigs.items():
-            if op == "null" and null_attacked != "unset":
+            if op == "null" and null_attacked is not UNSET:
                 y2 = null_attacked
             else:
                 try:
