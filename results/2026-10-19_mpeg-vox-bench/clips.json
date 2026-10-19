@@ -1,0 +1,849 @@
+{
+  "source": "ASVspoof2019 LA eval, bonafide",
+  "seed": 0,
+  "min_dur": 3.0,
+  "protocol": "/home/ksathwik/asvspoof_protocols/ASVspoof2019.LA.cm.eval.trl.txt",
+  "audio_dir": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac",
+  "clips": [
+    {
+      "clip_id": "asv000",
+      "speaker": "LA_0046",
+      "utt": "LA_E_5450657",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5450657.flac",
+      "duration_s": 3.196
+    },
+    {
+      "clip_id": "asv001",
+      "speaker": "LA_0001",
+      "utt": "LA_E_6580034",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6580034.flac",
+      "duration_s": 3.667
+    },
+    {
+      "clip_id": "asv002",
+      "speaker": "LA_0036",
+      "utt": "LA_E_8914589",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8914589.flac",
+      "duration_s": 3.836
+    },
+    {
+      "clip_id": "asv003",
+      "speaker": "LA_0022",
+      "utt": "LA_E_9087500",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9087500.flac",
+      "duration_s": 5.16
+    },
+    {
+      "clip_id": "asv004",
+      "speaker": "LA_0043",
+      "utt": "LA_E_3779448",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3779448.flac",
+      "duration_s": 3.067
+    },
+    {
+      "clip_id": "asv005",
+      "speaker": "LA_0004",
+      "utt": "LA_E_1547551",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1547551.flac",
+      "duration_s": 4.005
+    },
+    {
+      "clip_id": "asv006",
+      "speaker": "LA_0014",
+      "utt": "LA_E_5302082",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5302082.flac",
+      "duration_s": 3.112
+    },
+    {
+      "clip_id": "asv007",
+      "speaker": "LA_0045",
+      "utt": "LA_E_5560801",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5560801.flac",
+      "duration_s": 3.836
+    },
+    {
+      "clip_id": "asv008",
+      "speaker": "LA_0010",
+      "utt": "LA_E_4771468",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4771468.flac",
+      "duration_s": 3.02
+    },
+    {
+      "clip_id": "asv009",
+      "speaker": "LA_0067",
+      "utt": "LA_E_6668228",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6668228.flac",
+      "duration_s": 4.265
+    },
+    {
+      "clip_id": "asv010",
+      "speaker": "LA_0025",
+      "utt": "LA_E_6814863",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6814863.flac",
+      "duration_s": 4.435
+    },
+    {
+      "clip_id": "asv011",
+      "speaker": "LA_0006",
+      "utt": "LA_E_7733356",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7733356.flac",
+      "duration_s": 3.33
+    },
+    {
+      "clip_id": "asv012",
+      "speaker": "LA_0068",
+      "utt": "LA_E_4791175",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4791175.flac",
+      "duration_s": 6.65
+    },
+    {
+      "clip_id": "asv013",
+      "speaker": "LA_0020",
+      "utt": "LA_E_3544531",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3544531.flac",
+      "duration_s": 4.306
+    },
+    {
+      "clip_id": "asv014",
+      "speaker": "LA_0027",
+      "utt": "LA_E_5736660",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5736660.flac",
+      "duration_s": 3.321
+    },
+    {
+      "clip_id": "asv015",
+      "speaker": "LA_0047",
+      "utt": "LA_E_1934834",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1934834.flac",
+      "duration_s": 4.093
+    },
+    {
+      "clip_id": "asv016",
+      "speaker": "LA_0037",
+      "utt": "LA_E_7489506",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7489506.flac",
+      "duration_s": 4.175
+    },
+    {
+      "clip_id": "asv017",
+      "speaker": "LA_0060",
+      "utt": "LA_E_9683949",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9683949.flac",
+      "duration_s": 4.135
+    },
+    {
+      "clip_id": "asv018",
+      "speaker": "LA_0024",
+      "utt": "LA_E_2373619",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_2373619.flac",
+      "duration_s": 3.665
+    },
+    {
+      "clip_id": "asv019",
+      "speaker": "LA_0009",
+      "utt": "LA_E_9821691",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9821691.flac",
+      "duration_s": 4.045
+    },
+    {
+      "clip_id": "asv020",
+      "speaker": "LA_0026",
+      "utt": "LA_E_3693133",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3693133.flac",
+      "duration_s": 3.492
+    },
+    {
+      "clip_id": "asv021",
+      "speaker": "LA_0008",
+      "utt": "LA_E_4754694",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4754694.flac",
+      "duration_s": 3.027
+    },
+    {
+      "clip_id": "asv022",
+      "speaker": "LA_0035",
+      "utt": "LA_E_5162579",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5162579.flac",
+      "duration_s": 3.111
+    },
+    {
+      "clip_id": "asv023",
+      "speaker": "LA_0028",
+      "utt": "LA_E_5809479",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5809479.flac",
+      "duration_s": 4.6
+    },
+    {
+      "clip_id": "asv024",
+      "speaker": "LA_0049",
+      "utt": "LA_E_3485931",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3485931.flac",
+      "duration_s": 3.107
+    },
+    {
+      "clip_id": "asv025",
+      "speaker": "LA_0053",
+      "utt": "LA_E_6511090",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6511090.flac",
+      "duration_s": 4.352
+    },
+    {
+      "clip_id": "asv026",
+      "speaker": "LA_0051",
+      "utt": "LA_E_5075088",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5075088.flac",
+      "duration_s": 3.241
+    },
+    {
+      "clip_id": "asv027",
+      "speaker": "LA_0059",
+      "utt": "LA_E_1636866",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1636866.flac",
+      "duration_s": 4.947
+    },
+    {
+      "clip_id": "asv028",
+      "speaker": "LA_0050",
+      "utt": "LA_E_9111744",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9111744.flac",
+      "duration_s": 3.536
+    },
+    {
+      "clip_id": "asv029",
+      "speaker": "LA_0042",
+      "utt": "LA_E_5760692",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5760692.flac",
+      "duration_s": 3.196
+    },
+    {
+      "clip_id": "asv030",
+      "speaker": "LA_0005",
+      "utt": "LA_E_6766301",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6766301.flac",
+      "duration_s": 3.876
+    },
+    {
+      "clip_id": "asv031",
+      "speaker": "LA_0033",
+      "utt": "LA_E_7437708",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7437708.flac",
+      "duration_s": 3.837
+    },
+    {
+      "clip_id": "asv032",
+      "speaker": "LA_0057",
+      "utt": "LA_E_7458138",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7458138.flac",
+      "duration_s": 3.155
+    },
+    {
+      "clip_id": "asv033",
+      "speaker": "LA_0016",
+      "utt": "LA_E_7558691",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7558691.flac",
+      "duration_s": 3.709
+    },
+    {
+      "clip_id": "asv034",
+      "speaker": "LA_0064",
+      "utt": "LA_E_1602348",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1602348.flac",
+      "duration_s": 3.492
+    },
+    {
+      "clip_id": "asv035",
+      "speaker": "LA_0013",
+      "utt": "LA_E_6651738",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6651738.flac",
+      "duration_s": 4.308
+    },
+    {
+      "clip_id": "asv036",
+      "speaker": "LA_0039",
+      "utt": "LA_E_3483333",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3483333.flac",
+      "duration_s": 3.92
+    },
+    {
+      "clip_id": "asv037",
+      "speaker": "LA_0032",
+      "utt": "LA_E_3113041",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3113041.flac",
+      "duration_s": 4.259
+    },
+    {
+      "clip_id": "asv038",
+      "speaker": "LA_0044",
+      "utt": "LA_E_6554540",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6554540.flac",
+      "duration_s": 3.199
+    },
+    {
+      "clip_id": "asv039",
+      "speaker": "LA_0018",
+      "utt": "LA_E_8531173",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8531173.flac",
+      "duration_s": 3.069
+    },
+    {
+      "clip_id": "asv040",
+      "speaker": "LA_0040",
+      "utt": "LA_E_3609940",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3609940.flac",
+      "duration_s": 4.393
+    },
+    {
+      "clip_id": "asv041",
+      "speaker": "LA_0055",
+      "utt": "LA_E_1755748",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1755748.flac",
+      "duration_s": 3.626
+    },
+    {
+      "clip_id": "asv042",
+      "speaker": "LA_0017",
+      "utt": "LA_E_8313081",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8313081.flac",
+      "duration_s": 3.795
+    },
+    {
+      "clip_id": "asv043",
+      "speaker": "LA_0011",
+      "utt": "LA_E_7086778",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7086778.flac",
+      "duration_s": 3.025
+    },
+    {
+      "clip_id": "asv044",
+      "speaker": "LA_0058",
+      "utt": "LA_E_9103340",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9103340.flac",
+      "duration_s": 3.577
+    },
+    {
+      "clip_id": "asv045",
+      "speaker": "LA_0002",
+      "utt": "LA_E_9572203",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9572203.flac",
+      "duration_s": 4.097
+    },
+    {
+      "clip_id": "asv046",
+      "speaker": "LA_0003",
+      "utt": "LA_E_1048677",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1048677.flac",
+      "duration_s": 4.473
+    },
+    {
+      "clip_id": "asv047",
+      "speaker": "LA_0063",
+      "utt": "LA_E_5438066",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5438066.flac",
+      "duration_s": 3.069
+    },
+    {
+      "clip_id": "asv048",
+      "speaker": "LA_0019",
+      "utt": "LA_E_6230405",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6230405.flac",
+      "duration_s": 3.324
+    },
+    {
+      "clip_id": "asv049",
+      "speaker": "LA_0031",
+      "utt": "LA_E_8637523",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8637523.flac",
+      "duration_s": 4.992
+    },
+    {
+      "clip_id": "asv050",
+      "speaker": "LA_0052",
+      "utt": "LA_E_8681058",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8681058.flac",
+      "duration_s": 3.069
+    },
+    {
+      "clip_id": "asv051",
+      "speaker": "LA_0012",
+      "utt": "LA_E_1350734",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1350734.flac",
+      "duration_s": 3.537
+    },
+    {
+      "clip_id": "asv052",
+      "speaker": "LA_0038",
+      "utt": "LA_E_6368203",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6368203.flac",
+      "duration_s": 6.865
+    },
+    {
+      "clip_id": "asv053",
+      "speaker": "LA_0029",
+      "utt": "LA_E_2820896",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_2820896.flac",
+      "duration_s": 4.132
+    },
+    {
+      "clip_id": "asv054",
+      "speaker": "LA_0015",
+      "utt": "LA_E_2043577",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_2043577.flac",
+      "duration_s": 5.458
+    },
+    {
+      "clip_id": "asv055",
+      "speaker": "LA_0048",
+      "utt": "LA_E_9127222",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9127222.flac",
+      "duration_s": 4.478
+    },
+    {
+      "clip_id": "asv056",
+      "speaker": "LA_0054",
+      "utt": "LA_E_1994534",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1994534.flac",
+      "duration_s": 4.35
+    },
+    {
+      "clip_id": "asv057",
+      "speaker": "LA_0061",
+      "utt": "LA_E_4096577",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4096577.flac",
+      "duration_s": 3.666
+    },
+    {
+      "clip_id": "asv058",
+      "speaker": "LA_0021",
+      "utt": "LA_E_9820169",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9820169.flac",
+      "duration_s": 3.155
+    },
+    {
+      "clip_id": "asv059",
+      "speaker": "LA_0041",
+      "utt": "LA_E_9797501",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9797501.flac",
+      "duration_s": 3.622
+    },
+    {
+      "clip_id": "asv060",
+      "speaker": "LA_0007",
+      "utt": "LA_E_1768467",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1768467.flac",
+      "duration_s": 3.405
+    },
+    {
+      "clip_id": "asv061",
+      "speaker": "LA_0034",
+      "utt": "LA_E_3454842",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3454842.flac",
+      "duration_s": 3.368
+    },
+    {
+      "clip_id": "asv062",
+      "speaker": "LA_0023",
+      "utt": "LA_E_1268248",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1268248.flac",
+      "duration_s": 4.818
+    },
+    {
+      "clip_id": "asv063",
+      "speaker": "LA_0066",
+      "utt": "LA_E_8672894",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8672894.flac",
+      "duration_s": 3.583
+    },
+    {
+      "clip_id": "asv064",
+      "speaker": "LA_0065",
+      "utt": "LA_E_9211880",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9211880.flac",
+      "duration_s": 4.562
+    },
+    {
+      "clip_id": "asv065",
+      "speaker": "LA_0030",
+      "utt": "LA_E_8676989",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8676989.flac",
+      "duration_s": 5.16
+    },
+    {
+      "clip_id": "asv066",
+      "speaker": "LA_0056",
+      "utt": "LA_E_1071484",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1071484.flac",
+      "duration_s": 3.961
+    },
+    {
+      "clip_id": "asv067",
+      "speaker": "LA_0046",
+      "utt": "LA_E_4817837",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4817837.flac",
+      "duration_s": 3.495
+    },
+    {
+      "clip_id": "asv068",
+      "speaker": "LA_0001",
+      "utt": "LA_E_9693249",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9693249.flac",
+      "duration_s": 4.095
+    },
+    {
+      "clip_id": "asv069",
+      "speaker": "LA_0036",
+      "utt": "LA_E_1203094",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1203094.flac",
+      "duration_s": 3.28
+    },
+    {
+      "clip_id": "asv070",
+      "speaker": "LA_0022",
+      "utt": "LA_E_7491568",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7491568.flac",
+      "duration_s": 4.736
+    },
+    {
+      "clip_id": "asv071",
+      "speaker": "LA_0043",
+      "utt": "LA_E_7843229",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7843229.flac",
+      "duration_s": 4.048
+    },
+    {
+      "clip_id": "asv072",
+      "speaker": "LA_0004",
+      "utt": "LA_E_6436429",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6436429.flac",
+      "duration_s": 4.52
+    },
+    {
+      "clip_id": "asv073",
+      "speaker": "LA_0014",
+      "utt": "LA_E_3372021",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3372021.flac",
+      "duration_s": 3.201
+    },
+    {
+      "clip_id": "asv074",
+      "speaker": "LA_0045",
+      "utt": "LA_E_4235907",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4235907.flac",
+      "duration_s": 3.152
+    },
+    {
+      "clip_id": "asv075",
+      "speaker": "LA_0010",
+      "utt": "LA_E_3654301",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3654301.flac",
+      "duration_s": 3.02
+    },
+    {
+      "clip_id": "asv076",
+      "speaker": "LA_0067",
+      "utt": "LA_E_2483495",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_2483495.flac",
+      "duration_s": 3.54
+    },
+    {
+      "clip_id": "asv077",
+      "speaker": "LA_0025",
+      "utt": "LA_E_2252816",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_2252816.flac",
+      "duration_s": 3.199
+    },
+    {
+      "clip_id": "asv078",
+      "speaker": "LA_0006",
+      "utt": "LA_E_9450809",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9450809.flac",
+      "duration_s": 4.349
+    },
+    {
+      "clip_id": "asv079",
+      "speaker": "LA_0068",
+      "utt": "LA_E_2458204",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_2458204.flac",
+      "duration_s": 5.626
+    },
+    {
+      "clip_id": "asv080",
+      "speaker": "LA_0020",
+      "utt": "LA_E_1491231",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1491231.flac",
+      "duration_s": 3.022
+    },
+    {
+      "clip_id": "asv081",
+      "speaker": "LA_0027",
+      "utt": "LA_E_5327849",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5327849.flac",
+      "duration_s": 3.877
+    },
+    {
+      "clip_id": "asv082",
+      "speaker": "LA_0047",
+      "utt": "LA_E_5378243",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5378243.flac",
+      "duration_s": 3.877
+    },
+    {
+      "clip_id": "asv083",
+      "speaker": "LA_0037",
+      "utt": "LA_E_7028091",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7028091.flac",
+      "duration_s": 3.148
+    },
+    {
+      "clip_id": "asv084",
+      "speaker": "LA_0060",
+      "utt": "LA_E_7344145",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7344145.flac",
+      "duration_s": 4.432
+    },
+    {
+      "clip_id": "asv085",
+      "speaker": "LA_0024",
+      "utt": "LA_E_3355132",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3355132.flac",
+      "duration_s": 4.218
+    },
+    {
+      "clip_id": "asv086",
+      "speaker": "LA_0009",
+      "utt": "LA_E_9721785",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9721785.flac",
+      "duration_s": 5.886
+    },
+    {
+      "clip_id": "asv087",
+      "speaker": "LA_0026",
+      "utt": "LA_E_1055678",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1055678.flac",
+      "duration_s": 4.645
+    },
+    {
+      "clip_id": "asv088",
+      "speaker": "LA_0008",
+      "utt": "LA_E_7795320",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7795320.flac",
+      "duration_s": 3.413
+    },
+    {
+      "clip_id": "asv089",
+      "speaker": "LA_0035",
+      "utt": "LA_E_6136505",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6136505.flac",
+      "duration_s": 3.278
+    },
+    {
+      "clip_id": "asv090",
+      "speaker": "LA_0028",
+      "utt": "LA_E_8944579",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8944579.flac",
+      "duration_s": 5.753
+    },
+    {
+      "clip_id": "asv091",
+      "speaker": "LA_0049",
+      "utt": "LA_E_4256659",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4256659.flac",
+      "duration_s": 3.025
+    },
+    {
+      "clip_id": "asv092",
+      "speaker": "LA_0053",
+      "utt": "LA_E_4828197",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4828197.flac",
+      "duration_s": 3.925
+    },
+    {
+      "clip_id": "asv093",
+      "speaker": "LA_0051",
+      "utt": "LA_E_1126163",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1126163.flac",
+      "duration_s": 3.408
+    },
+    {
+      "clip_id": "asv094",
+      "speaker": "LA_0059",
+      "utt": "LA_E_8722557",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8722557.flac",
+      "duration_s": 3.75
+    },
+    {
+      "clip_id": "asv095",
+      "speaker": "LA_0050",
+      "utt": "LA_E_2131280",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_2131280.flac",
+      "duration_s": 3.791
+    },
+    {
+      "clip_id": "asv096",
+      "speaker": "LA_0042",
+      "utt": "LA_E_6439212",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6439212.flac",
+      "duration_s": 3.151
+    },
+    {
+      "clip_id": "asv097",
+      "speaker": "LA_0005",
+      "utt": "LA_E_9715681",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9715681.flac",
+      "duration_s": 3.751
+    },
+    {
+      "clip_id": "asv098",
+      "speaker": "LA_0033",
+      "utt": "LA_E_4086522",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4086522.flac",
+      "duration_s": 3.537
+    },
+    {
+      "clip_id": "asv099",
+      "speaker": "LA_0057",
+      "utt": "LA_E_1401349",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1401349.flac",
+      "duration_s": 3.154
+    },
+    {
+      "clip_id": "asv100",
+      "speaker": "LA_0016",
+      "utt": "LA_E_5166597",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5166597.flac",
+      "duration_s": 3.026
+    },
+    {
+      "clip_id": "asv101",
+      "speaker": "LA_0064",
+      "utt": "LA_E_9523806",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9523806.flac",
+      "duration_s": 3.153
+    },
+    {
+      "clip_id": "asv102",
+      "speaker": "LA_0013",
+      "utt": "LA_E_3358578",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3358578.flac",
+      "duration_s": 3.791
+    },
+    {
+      "clip_id": "asv103",
+      "speaker": "LA_0039",
+      "utt": "LA_E_8277021",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8277021.flac",
+      "duration_s": 3.835
+    },
+    {
+      "clip_id": "asv104",
+      "speaker": "LA_0032",
+      "utt": "LA_E_4608229",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_4608229.flac",
+      "duration_s": 3.882
+    },
+    {
+      "clip_id": "asv105",
+      "speaker": "LA_0044",
+      "utt": "LA_E_8744180",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8744180.flac",
+      "duration_s": 3.538
+    },
+    {
+      "clip_id": "asv106",
+      "speaker": "LA_0018",
+      "utt": "LA_E_1861903",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1861903.flac",
+      "duration_s": 3.321
+    },
+    {
+      "clip_id": "asv107",
+      "speaker": "LA_0040",
+      "utt": "LA_E_9514350",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9514350.flac",
+      "duration_s": 3.71
+    },
+    {
+      "clip_id": "asv108",
+      "speaker": "LA_0055",
+      "utt": "LA_E_6509076",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6509076.flac",
+      "duration_s": 3.112
+    },
+    {
+      "clip_id": "asv109",
+      "speaker": "LA_0017",
+      "utt": "LA_E_3031206",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3031206.flac",
+      "duration_s": 3.881
+    },
+    {
+      "clip_id": "asv110",
+      "speaker": "LA_0011",
+      "utt": "LA_E_8482194",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_8482194.flac",
+      "duration_s": 3.487
+    },
+    {
+      "clip_id": "asv111",
+      "speaker": "LA_0058",
+      "utt": "LA_E_1722681",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1722681.flac",
+      "duration_s": 3.027
+    },
+    {
+      "clip_id": "asv112",
+      "speaker": "LA_0002",
+      "utt": "LA_E_5224168",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5224168.flac",
+      "duration_s": 6.693
+    },
+    {
+      "clip_id": "asv113",
+      "speaker": "LA_0003",
+      "utt": "LA_E_9059753",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_9059753.flac",
+      "duration_s": 3.109
+    },
+    {
+      "clip_id": "asv114",
+      "speaker": "LA_0063",
+      "utt": "LA_E_1921207",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_1921207.flac",
+      "duration_s": 4.136
+    },
+    {
+      "clip_id": "asv115",
+      "speaker": "LA_0019",
+      "utt": "LA_E_5171505",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_5171505.flac",
+      "duration_s": 3.624
+    },
+    {
+      "clip_id": "asv116",
+      "speaker": "LA_0031",
+      "utt": "LA_E_6778807",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6778807.flac",
+      "duration_s": 4.603
+    },
+    {
+      "clip_id": "asv117",
+      "speaker": "LA_0052",
+      "utt": "LA_E_2379520",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_2379520.flac",
+      "duration_s": 4.94
+    },
+    {
+      "clip_id": "asv118",
+      "speaker": "LA_0012",
+      "utt": "LA_E_6992385",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_6992385.flac",
+      "duration_s": 3.964
+    },
+    {
+      "clip_id": "asv119",
+      "speaker": "LA_0038",
+      "utt": "LA_E_7056845",
+      "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_7056845.flac",
+      "duration_s": 3.581
+    }
+  ]
+}
