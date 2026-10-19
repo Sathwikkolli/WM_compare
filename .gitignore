@@ -60,3 +60,8 @@ deepfake_probe/*.log
 masking/work/
 masking/*.log
 masking/clips.json
+
+# mpeg_wm: clip list is regenerated on the cluster; audio and Slurm logs stay there
+mpeg_wm/clips120.json
+mpeg_wm/work/
+mpeg_wm/*.log
