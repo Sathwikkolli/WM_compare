@@ -1,0 +1,71 @@
+{
+ "clip_id": "asv013",
+ "utt": "LA_E_3544531",
+ "speaker": "LA_0020",
+ "path": "/nfs/turbo/umd-hafiz/issf_server_data/AsvSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac/LA_E_3544531.flac",
+ "mpeg_key": 5013,
+ "mpeg_strength_db": 0.0,
+ "targets": [
+  4.2
+ ],
+ "systems": {
+  "casp1": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625,
+   "way": 1,
+   "shuffle": false,
+   "reused_gains": false,
+   "gain_db_min": -41.456658369941024,
+   "gain_db_max": 16.48540028826634,
+   "casp_dprime_history": [
+    40.64121435808074,
+    35.65014996222308,
+    31.864232215443522,
+    29.805715806187408,
+    28.641651963094997
+   ]
+  },
+  "casp1_shuf": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625,
+   "way": 1,
+   "shuffle": true,
+   "reused_gains": true,
+   "gain_db_min": -41.456658369941024,
+   "gain_db_max": 16.48540028826634,
+   "casp_dprime_history": []
+  },
+  "casp2": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625,
+   "way": 2,
+   "shuffle": false,
+   "reused_gains": false,
+   "gain_db_min": -45.0,
+   "gain_db_max": 45.0,
+   "casp_dprime_history": [
+    100.14334598611066,
+    65.15881484626331,
+    42.404610670971465,
+    41.86792426778333,
+    40.55888778517453,
+    40.552348537533135,
+    40.34871042645476
+   ]
+  },
+  "casp2_shuf": {
+   "nbits": 16,
+   "k_threshold": 13,
+   "fpr": 0.0106353759765625,
+   "way": 2,
+   "shuffle": true,
+   "reused_gains": true,
+   "gain_db_min": -45.0,
+   "gain_db_max": 45.0,
+   "casp_dprime_history": []
+  }
+ }
+}
