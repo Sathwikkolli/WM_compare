@@ -1,0 +1,9 @@
+context,clips,cells,headroom_db,ci_lo,ci_hi,share_room,verdict
+long_pause,30,3041,-0.8725,-1.415,-0.62,0.13333333333333333,agree (within +-1 dB)
+short_gap,29,183,1.53,1.09,3.19,0.8275862068965517,CASP sees room MPEG misses
+tail,30,412,1.31,1.0025,1.98,0.8666666666666667,CASP sees room MPEG misses
+onset,30,244,0.15499999999999997,-1.605,2.165,0.5,agree (within +-1 dB)
+voiced,30,1904,2.4,1.9575,2.8925,0.9,CASP sees room MPEG misses
+fricative,29,350,-1.32,-1.6199999999999999,-0.465,0.2413793103448276,agree (within +-1 dB)
+decay,30,240,-0.0775,-0.8600000000000001,0.39,0.4666666666666667,agree (within +-1 dB)
+other,30,705,-0.535,-1.07,-0.3325,0.23333333333333334,agree (within +-1 dB)
